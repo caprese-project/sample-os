@@ -40,9 +40,9 @@ set_target_properties(init PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/l
 
 add_custom_target(
   root_task_payload
-  COMMAND ${CMAKE_OBJCOPY} -O binary --update-section .apm_elf=$<TARGET_FILE:apm> --update-section .mm_elf=$<TARGET_FILE:mm> $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
+  COMMAND ${CMAKE_OBJCOPY} -O binary --update-section .apm_elf=$<TARGET_FILE_DIR:apm>/apm.elf --update-section .mm_elf=$<TARGET_FILE_DIR:mm>/mm.elf $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
 )
-add_dependencies(root_task_payload init)
+add_dependencies(root_task_payload init apm_elf mm_elf)
 
 set(CONFIG_ROOT_TASK_PAYLOAD $<TARGET_FILE_DIR:init>/payload PARENT_SCOPE)
 set(CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS ${CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS} PARENT_SCOPE)

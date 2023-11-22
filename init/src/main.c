@@ -33,8 +33,9 @@ int main(root_boot_info_t* root_boot_info) {
   sys_task_cap_resume(mm_task_cap);
   sys_task_cap_switch(mm_task_cap);
 
-  sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, root_boot_info->arch_info.dtb_start);
-  sys_task_cap_set_reg(apm_task_cap, REG_ARG_1, root_boot_info->arch_info.dtb_end);
+  task_cap_t dst_mm_task_cap = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, mm_task_cap));
+
+  sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, dst_mm_task_cap);
 
   sys_task_cap_resume(apm_task_cap);
   sys_task_cap_switch(apm_task_cap);

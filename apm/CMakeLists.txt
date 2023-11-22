@@ -22,9 +22,15 @@ target_link_options(
 )
 
 add_custom_target(
+  apm_elf
+  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded $<TARGET_FILE:apm> $<TARGET_FILE_DIR:apm>/apm.elf
+)
+add_dependencies(apm_elf apm)
+
+add_custom_target(
   apm_size
-  COMMAND sh "-c" "ls -l $<TARGET_FILE:apm> | awk '{print \"#define CONFIG_APM_ELF_SIZE \"$5}' > ${GENERATE_DIR}/apm_elf_size.h"
+  COMMAND sh "-c" "ls -l $<TARGET_FILE_DIR:apm>/apm.elf | awk '{print \"#define CONFIG_APM_ELF_SIZE \"$5}' > ${GENERATE_DIR}/apm_elf_size.h"
   BYPRODUCTS ${GENERATE_DIR}/apm_elf_size.h
   VERBATIM
 )
-add_dependencies(apm_size apm)
+add_dependencies(apm_size apm_elf)

@@ -23,9 +23,15 @@ target_link_options(
 )
 
 add_custom_target(
+  mm_elf
+  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded $<TARGET_FILE:mm> $<TARGET_FILE_DIR:mm>/mm.elf
+)
+add_dependencies(mm_elf mm)
+
+add_custom_target(
   mm_size
-  COMMAND sh "-c" "ls -l $<TARGET_FILE:mm> | awk '{print \"#define CONFIG_MM_ELF_SIZE \"$5}' > ${GENERATE_DIR}/mm_elf_size.h"
+  COMMAND sh "-c" "ls -l $<TARGET_FILE_DIR:mm>/mm.elf | awk '{print \"#define CONFIG_MM_ELF_SIZE \"$5}' > ${GENERATE_DIR}/mm_elf_size.h"
   BYPRODUCTS ${GENERATE_DIR}/mm_elf_size.h
   VERBATIM
 )
-add_dependencies(mm_size mm)
+add_dependencies(mm_size mm_elf)
