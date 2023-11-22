@@ -28,8 +28,18 @@ set(
   $<IF:$<CONFIG:Debug>,-g3,-g0>
 )
 
+set(GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${GENERATE_DIR})
+
 include(FetchContent)
-include(ExternalProject)
+
+set(LIBCAPRESE_COMPILE_OPTIONS ${CONFIG_C_OPTIONS})
+
+FetchContent_Declare(
+  libcaprese
+  GIT_REPOSITORY https://github.com/caprese-project/libcaprese.git
+)
+FetchContent_MakeAvailable(libcaprese)
 
 add_subdirectory(init)
 add_subdirectory(apm)
@@ -45,20 +55,10 @@ else()
 endif()
 
 set(PLATFORM qemu-riscv-virt)
-set(CONFIG_ROOT_TASK_PAYLOAD $<TARGET_FILE_DIR:init>/payload)
-set(CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS 0xa0000000)
+set(CONFIG_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/image.elf)
 
-ExternalProject_Add(
+FetchContent_Declare(
   caprese
   GIT_REPOSITORY https://github.com/caprese-project/caprese.git
-  CMAKE_ARGS -DPLATFORM=${PLATFORM} -DCONFIG_ROOT_TASK_PAYLOAD=${CONFIG_ROOT_TASK_PAYLOAD} -DCONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS=${CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS} -DCONFIG_LOG_LEVEL=${CONFIG_LOG_LEVEL} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-  INSTALL_COMMAND ""
-  BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/caprese-prefix/src/caprese-build/image.elf
 )
-
-ExternalProject_Add_StepDependencies(caprese build root_task_payload)
-
-add_custom_command(
-  TARGET caprese POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/caprese-prefix/src/caprese-build/image.elf ${CMAKE_CURRENT_BINARY_DIR}/image.elf
-)
+FetchContent_MakeAvailable(caprese)
