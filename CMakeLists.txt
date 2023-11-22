@@ -42,8 +42,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libcaprese)
 
 add_subdirectory(init)
-add_subdirectory(apm)
 add_subdirectory(mm)
+add_subdirectory(apm)
 add_subdirectory(fs)
 
 add_subdirectory(libc)

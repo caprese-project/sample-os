@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.12)
+
+add_executable(mm)
+target_sources(
+  mm PRIVATE
+  src/internal_heap.c
+  src/internal.c
+  src/main.c
+)
+
+target_compile_features(mm PRIVATE c_std_17)
+target_compile_options(mm PRIVATE ${CONFIG_C_OPTIONS})
+
+target_include_directories(mm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+target_link_libraries(mm PRIVATE libc)
+
+target_link_options(
+  mm
+  PRIVATE
+  -nostdlib
+  -z max-page-size=4096
+)
+
+add_custom_target(
+  mm_size
+  COMMAND sh "-c" "ls -l $<TARGET_FILE:mm> | awk '{print \"#define CONFIG_MM_ELF_SIZE \"$5}' > ${GENERATE_DIR}/mm_elf_size.h"
+  BYPRODUCTS ${GENERATE_DIR}/mm_elf_size.h
+  VERBATIM
+)
+add_dependencies(mm_size mm)

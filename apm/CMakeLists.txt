@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.12)
 
 add_executable(apm)
 
-target_sources(apm
-  PRIVATE
+target_sources(
+  apm PRIVATE
   src/main.c
 )
 

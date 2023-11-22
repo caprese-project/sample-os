@@ -21,17 +21,19 @@ _start:
 
   # a0: argc
   # a1: argv
-  # s0: this-task-cap
-  # s1: apm-task-cap
+  # s0: this task cap
+  # s1: apm task cap
+  # s2: heap start
 
-  mv s2, a0
-  mv s3, a1
+  mv s3, a0
+  mv s4, a1
   mv a0, s0
   mv a1, s1
+  mv a2, s2
   call __crt_startup
   bnez a0, exit_phase
-  mv a0, s2
-  mv a1, s3
+  mv a0, s3
+  mv a1, s4
   call main
 
 exit_phase:

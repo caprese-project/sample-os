@@ -10,6 +10,7 @@ target_sources(
   src/main.c
   src/mem.c
   src/section.s
+  src/task.c
 )
 
 target_compile_features(init PRIVATE c_std_17)
@@ -25,7 +26,7 @@ add_custom_target(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ldS
   BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
 )
-add_dependencies(init_linker apm_size)
+add_dependencies(init_linker mm_size apm_size)
 add_dependencies(init init_linker)
 
 target_link_options(
@@ -39,7 +40,7 @@ set_target_properties(init PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/l
 
 add_custom_target(
   root_task_payload
-  COMMAND ${CMAKE_OBJCOPY} -O binary --update-section .apm_elf=$<TARGET_FILE:apm> $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
+  COMMAND ${CMAKE_OBJCOPY} -O binary --update-section .apm_elf=$<TARGET_FILE:apm> --update-section .mm_elf=$<TARGET_FILE:mm> $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
 )
 add_dependencies(root_task_payload init)
 

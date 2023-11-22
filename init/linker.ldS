@@ -1,4 +1,5 @@
 #include <apm_elf_size.h>
+#include <mm_elf_size.h>
 
 OUTPUT_ARCH( "riscv" )
 ENTRY( _start )
@@ -58,6 +59,14 @@ SECTIONS
     KEEP(*(.apm_elf))
     . += CONFIG_APM_ELF_SIZE;
     _apm_elf_end = .;
+  }
+
+  .mm_elf :
+  {
+    _mm_elf_start = .;
+    KEEP(*(.mm_elf))
+    . += CONFIG_MM_ELF_SIZE;
+    _mm_elf_end = .;
   }
 
   . = ALIGN(0x1000);
