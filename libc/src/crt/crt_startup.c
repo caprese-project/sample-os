@@ -1,5 +1,6 @@
 #include <crt/global.h>
 #include <internal/branch.h>
+#include <libcaprese/cap.h>
 #include <stdlib.h>
 
 void __crt_cleanup() {
@@ -8,9 +9,9 @@ void __crt_cleanup() {
   }
 }
 
-int __crt_startup(uintptr_t this_task_cap, uintptr_t apm_task_cap, uintptr_t heap_start) {
+int __crt_startup(task_cap_t this_task_cap, endpoint_cap_t apm_ep_cap, uintptr_t heap_start) {
   __this_task_cap = this_task_cap;
-  __apm_task_cap  = apm_task_cap;
+  __apm_ep_cap    = apm_ep_cap;
   __heap_start    = heap_start;
 
   __if_unlikely (atexit(__crt_cleanup) != 0) {
@@ -21,7 +22,7 @@ int __crt_startup(uintptr_t this_task_cap, uintptr_t apm_task_cap, uintptr_t hea
     (*constructor)();
   }
 
-  if (__apm_task_cap != 0) {
+  if (__apm_ep_cap != 0) {
     // TODO
   }
 

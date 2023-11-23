@@ -1,6 +1,5 @@
 #include <crt/global.h>
 
-cap_t     __this_task_cap;
-cap_t     __apm_task_cap;
-cap_t     __mm_task_cap;
-uintptr_t __heap_start;
+task_cap_t     __this_task_cap;
+endpoint_cap_t __apm_ep_cap;
+uintptr_t      __heap_start;

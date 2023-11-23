@@ -4,7 +4,10 @@ add_executable(apm)
 
 target_sources(
   apm PRIVATE
+  src/elf.c
   src/main.c
+  src/section.s
+  src/task.c
 )
 
 target_compile_features(apm PRIVATE c_std_17)
@@ -12,18 +15,28 @@ target_compile_options(apm PRIVATE ${CONFIG_C_OPTIONS})
 
 target_include_directories(apm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(apm PRIVATE libc)
+target_link_libraries(apm PRIVATE libc service)
+
+add_custom_target(
+  apm_linker
+  COMMAND ${CMAKE_C_COMPILER} -DCONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS=${CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS} -I ${GENERATE_DIR} -E -P -x c ${CMAKE_CURRENT_SOURCE_DIR}/linker.ldS >${CMAKE_CURRENT_BINARY_DIR}/linker.ld
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ldS
+  BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
+)
+add_dependencies(apm_linker plic_size)
+add_dependencies(apm apm_linker)
 
 target_link_options(
   apm
   PRIVATE
+  -T ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
   -nostdlib
   -z max-page-size=4096
 )
 
 add_custom_target(
   apm_elf
-  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded $<TARGET_FILE:apm> $<TARGET_FILE_DIR:apm>/apm.elf
+  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded --update-section .plic_elf=$<TARGET_FILE_DIR:plic>/plic.elf $<TARGET_FILE:apm> $<TARGET_FILE_DIR:apm>/apm.elf
 )
 add_dependencies(apm_elf apm)
 

@@ -14,10 +14,9 @@ extern "C" {
   extern void (*__fini_array_start[])();
   extern void (*__fini_array_end[])();
 
-  extern cap_t     __this_task_cap;
-  extern cap_t     __apm_task_cap;
-  extern cap_t     __mm_task_cap;
-  extern uintptr_t __heap_start;
+  extern task_cap_t     __this_task_cap;
+  extern endpoint_cap_t __apm_ep_cap;
+  extern uintptr_t      __heap_start;
 
 #ifdef __cplusplus
 } // extern "C"

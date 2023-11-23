@@ -3,9 +3,10 @@ cmake_minimum_required(VERSION 3.12)
 add_executable(mm)
 target_sources(
   mm PRIVATE
+  src/init.c
   src/internal_heap.c
-  src/internal.c
   src/main.c
+  src/server.c
 )
 
 target_compile_features(mm PRIVATE c_std_17)

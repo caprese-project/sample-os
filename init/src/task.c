@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t elf_size) {
-  uintptr_t mem_cap = fetch_mem_cap(root_boot_info, false, true, true, false, KILO_PAGE_SIZE * 5, KILO_PAGE_SIZE);
+  mem_cap_t mem_cap = fetch_mem_cap(root_boot_info, false, true, true, false, KILO_PAGE_SIZE * 5, KILO_PAGE_SIZE);
 
   cap_space_cap_t  cap_space_cap         = unwrap_sysret(sys_mem_cap_create_cap_space_object(mem_cap));
   page_table_cap_t root_page_table_cap   = unwrap_sysret(sys_mem_cap_create_page_table_object(mem_cap));

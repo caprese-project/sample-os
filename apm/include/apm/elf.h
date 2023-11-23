@@ -1,6 +1,9 @@
 #ifndef APM_ELF_H_
 #define APM_ELF_H_
 
+#include <libcaprese/cap.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef uint16_t  elf_half_t;
@@ -82,5 +85,7 @@ typedef struct {
   elf_word_t address_alignment;
   elf_word_t entry_size;
 } elf_section_header_t;
+
+bool elf_load(task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size);
 
 #endif // APM_ELF_H_

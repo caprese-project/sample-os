@@ -1,10 +1,13 @@
 #include <crt/global.h>
 #include <libcaprese/syscall.h>
-#include <mm/internal.h>
 #include <mm/internal_heap.h>
 #include <stdlib.h>
 
-size_t internal_heap_page_count;
+size_t           internal_heap_page_count;
+page_table_cap_t root_page_table_cap;
+page_table_cap_t inter_page_table_cap;
+mem_cap_t*       mem_caps;
+size_t           num_mem_caps;
 
 static mem_cap_t fetch_mem_cap(uintptr_t dtb_start, uintptr_t dtb_end) {
   cap_t  mem_cap      = 0;

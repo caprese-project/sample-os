@@ -22,7 +22,7 @@ _start:
   # a0: argc
   # a1: argv
   # s0: this task cap
-  # s1: apm task cap
+  # s1: apm ep cap
   # s2: heap start
 
   mv s3, a0

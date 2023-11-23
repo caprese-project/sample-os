@@ -41,12 +41,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libcaprese)
 
+set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(init)
 add_subdirectory(mm)
 add_subdirectory(apm)
+add_subdirectory(dev)
 add_subdirectory(fs)
 
 add_subdirectory(libc)
+add_subdirectory(service)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
   set(CONFIG_LOG_LEVEL all)
