@@ -38,7 +38,7 @@ bool mm_detach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap) {
 }
 
 mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int flags) {
-  assert(unwrap_sysret(sys_task_cap_switch(mm_ep_cap)) == CAP_ENDPOINT);
+  assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
 
   message_buffer_t msg_buf = {};
 
