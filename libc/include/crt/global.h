@@ -16,7 +16,6 @@ extern "C" {
 
   extern task_cap_t     __this_task_cap;
   extern endpoint_cap_t __apm_ep_cap;
-  extern uintptr_t      __heap_start;
 
 #ifdef __cplusplus
 } // extern "C"

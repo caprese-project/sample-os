@@ -18,7 +18,7 @@ int main(endpoint_cap_t _mm_ep_cap) {
     abort();
   }
 
-  mm_attach(_mm_ep_cap, plic_task_cap);
+  mm_attach(_mm_ep_cap, plic_task_cap, 0);
 
   sys_task_cap_resume(plic_task_cap);
   sys_task_cap_switch(plic_task_cap);

@@ -3,6 +3,7 @@
 #include <mm/internal_heap.h>
 #include <stdlib.h>
 
+uintptr_t        internal_heap_root;
 size_t           internal_heap_page_count;
 page_table_cap_t root_page_table_cap;
 page_table_cap_t inter_page_table_cap;
@@ -64,7 +65,7 @@ static mem_cap_t fetch_mem_cap(uintptr_t dtb_start, uintptr_t dtb_end) {
   return mem_cap;
 }
 
-void init_first_internal_heap(uintptr_t dtb_start, uintptr_t dtb_end) {
+void init_first_internal_heap(uintptr_t dtb_start, uintptr_t dtb_end, uintptr_t heap_root) {
   page_table_cap_t page_table_cap = inter_page_table_cap;
 
   for (int level = MEGA_PAGE; level > 0; --level) {
@@ -74,7 +75,7 @@ void init_first_internal_heap(uintptr_t dtb_start, uintptr_t dtb_end) {
     }
 
     page_table_cap_t next_page_table_cap = unwrap_sysret(sys_mem_cap_create_page_table_object(mem_cap));
-    unwrap_sysret(sys_page_table_cap_map_table(page_table_cap, RISCV_MMU_GET_PAGE_TABLE_INDEX(__heap_start, level), next_page_table_cap));
+    unwrap_sysret(sys_page_table_cap_map_table(page_table_cap, RISCV_MMU_GET_PAGE_TABLE_INDEX(heap_root, level), next_page_table_cap));
     page_table_cap = next_page_table_cap;
   }
 
@@ -84,8 +85,9 @@ void init_first_internal_heap(uintptr_t dtb_start, uintptr_t dtb_end) {
   }
 
   virt_page_cap_t page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, KILO_PAGE));
-  unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, RISCV_MMU_GET_PAGE_TABLE_INDEX(__heap_start, KILO_PAGE), true, true, false, page_cap));
+  unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, RISCV_MMU_GET_PAGE_TABLE_INDEX(heap_root, KILO_PAGE), true, true, false, page_cap));
 
+  internal_heap_root       = heap_root;
   internal_heap_page_count = 1;
 }
 

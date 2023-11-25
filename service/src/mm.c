@@ -3,7 +3,7 @@
 #include <mm/ipc.h>
 #include <service/mm.h>
 
-bool mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap) {
+bool mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_root) {
   assert(unwrap_sysret(sys_task_cap_switch(mm_ep_cap)) == CAP_ENDPOINT);
   assert(unwrap_sysret(sys_cap_type(task_cap)) == CAP_TASK);
 
@@ -12,8 +12,9 @@ bool mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap) {
   msg_buf.cap_part_length = 1;
   msg_buf.data[0]         = task_cap;
 
-  msg_buf.data_part_length = 1;
+  msg_buf.data_part_length = 2;
   msg_buf.data[1]          = MM_MSG_TYPE_ATTACH;
+  msg_buf.data[2]          = heap_root;
 
   sysret_t sysret = sys_endpoint_cap_send_long(mm_ep_cap, &msg_buf);
 
@@ -49,6 +50,27 @@ mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int 
   msg_buf.data[1]          = size;
   msg_buf.data[2]          = alignment;
   msg_buf.data[3]          = flags;
+
+  sysret_t sysret = sys_endpoint_cap_call(mm_ep_cap, &msg_buf);
+
+  if (sysret.error != 0) {
+    return 0;
+  }
+
+  return msg_buf.data[0];
+}
+
+mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size) {
+  assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
+
+  message_buffer_t msg_buf = {};
+
+  msg_buf.cap_part_length = 0;
+
+  msg_buf.data_part_length = 3;
+  msg_buf.data[0]          = MM_MSG_TYPE_RETRIEVE;
+  msg_buf.data[1]          = addr;
+  msg_buf.data[2]          = size;
 
   sysret_t sysret = sys_endpoint_cap_call(mm_ep_cap, &msg_buf);
 

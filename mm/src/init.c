@@ -1,4 +1,3 @@
-#include <crt/global.h>
 #include <libcaprese/syscall.h>
 #include <mm/internal_heap.h>
 #include <stdlib.h>
@@ -56,7 +55,7 @@ static mem_cap_t fetch_mem_cap(uintptr_t dtb_start, uintptr_t dtb_end, size_t si
   return mem_caps[index];
 }
 
-endpoint_cap_t init(endpoint_cap_t init_task_ep_cap) {
+endpoint_cap_t init(endpoint_cap_t init_task_ep_cap, uintptr_t heap_root) {
   message_buffer_t msg_buf;
   sys_endpoint_cap_receive(init_task_ep_cap, &msg_buf);
 
@@ -89,9 +88,9 @@ endpoint_cap_t init(endpoint_cap_t init_task_ep_cap) {
     abort();
   }
 
-  init_first_internal_heap(dtb_start, dtb_end);
+  init_first_internal_heap(dtb_start, dtb_end, heap_root);
 
-  mem_caps     = (mem_cap_t*)__heap_start;
+  mem_caps     = (mem_cap_t*)heap_root;
   num_mem_caps = msg_buf.cap_part_length;
 
   for (size_t i = 0; i < num_mem_caps; ++i) {

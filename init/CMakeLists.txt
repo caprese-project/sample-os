@@ -18,7 +18,7 @@ target_compile_options(init PRIVATE ${CONFIG_C_OPTIONS})
 
 target_include_directories(init PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(init PRIVATE libc)
+target_link_libraries(init PRIVATE libc service)
 
 add_custom_target(
   init_linker

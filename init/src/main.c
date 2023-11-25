@@ -4,6 +4,7 @@
 #include <libcaprese/root_boot_info.h>
 #include <libcaprese/syscall.h>
 #include <stdlib.h>
+#include <service/mm.h>
 
 extern const char _apm_elf_start[];
 extern const char _apm_elf_end[];
@@ -23,12 +24,14 @@ static endpoint_cap_t create_ep_cap(root_boot_info_t* root_boot_info) {
 int main(root_boot_info_t* root_boot_info) {
   __this_task_cap = root_boot_info->root_task_cap;
 
-  task_cap_t mm_task_cap = create_task(root_boot_info, _mm_elf_start, _mm_elf_end - _mm_elf_start);
+  task_cap_t mm_task_cap = create_task(root_boot_info, _mm_elf_start, _mm_elf_end - _mm_elf_start, NULL);
   if (mm_task_cap == 0) {
     abort();
   }
 
-  task_cap_t apm_task_cap = create_task(root_boot_info, _apm_elf_start, _apm_elf_end - _apm_elf_start);
+  uintptr_t apm_heap_root;
+
+  task_cap_t apm_task_cap = create_task(root_boot_info, _apm_elf_start, _apm_elf_end - _apm_elf_start, &apm_heap_root);
   if (apm_task_cap == 0) {
     abort();
   }
@@ -62,6 +65,8 @@ int main(root_boot_info_t* root_boot_info) {
   if (unwrap_sysret(sys_cap_type(mm_ep_cap)) != CAP_ENDPOINT) {
     abort();
   }
+
+  mm_attach(mm_ep_cap, apm_task_cap, apm_heap_root);
 
   endpoint_cap_t mm_ep_cap_dst = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, mm_ep_cap));
 

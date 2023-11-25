@@ -59,6 +59,9 @@ bool elf_load(task_cap_t task, page_table_cap_t task_root_page_table_cap, const 
     return false;
   }
 
+  // const elf_header_t*         header          = (const elf_header_t*)data;
+  // const elf_program_header_t* program_headers = (const elf_program_header_t*)((uintptr_t)data + header->program_header_position);
+
   (void)task;
   (void)task_root_page_table_cap;
 

@@ -77,7 +77,7 @@ static page_table_cap_t map_page_table(root_boot_info_t* root_boot_info, task_ca
   return page_table_cap;
 }
 
-bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size) {
+bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size, uintptr_t* heap_root) {
   if (!is_valid_elf_format(data, size)) {
     return false;
   }
@@ -175,7 +175,10 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
 
   unwrap_sysret(sys_task_cap_set_reg(task, ARCH_REG_S0, dst_task));
   unwrap_sysret(sys_task_cap_set_reg(task, ARCH_REG_S1, 0));
-  unwrap_sysret(sys_task_cap_set_reg(task, ARCH_REG_S2, heap_start));
+
+  if (heap_root) {
+    *heap_root = heap_start;
+  }
 
   return true;
 }

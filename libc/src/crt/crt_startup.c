@@ -9,10 +9,9 @@ void __crt_cleanup() {
   }
 }
 
-int __crt_startup(task_cap_t this_task_cap, endpoint_cap_t apm_ep_cap, uintptr_t heap_start) {
+int __crt_startup(task_cap_t this_task_cap, endpoint_cap_t apm_ep_cap) {
   __this_task_cap = this_task_cap;
   __apm_ep_cap    = apm_ep_cap;
-  __heap_start    = heap_start;
 
   __if_unlikely (atexit(__crt_cleanup) != 0) {
     return 1;
