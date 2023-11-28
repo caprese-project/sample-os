@@ -101,7 +101,11 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
       continue;
     }
 
-    if (program_headers[i].file_size > program_headers[i].memory_size) {
+    if (va_base > program_headers[i].virtual_address) {
+      return false;
+    }
+
+    if (program_headers[i].virtual_address + program_headers[i].memory_size - va_base > MEGA_PAGE_SIZE) {
       return false;
     }
 
@@ -120,8 +124,15 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
 
     for (size_t offset = 0; offset < program_headers[i].file_size; offset += KILO_PAGE_SIZE) {
       virt_page_cap_t virt_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, KILO_PAGE));
+
       unwrap_sysret(sys_page_table_cap_map_page(root_boot_info->page_table_caps[KILO_PAGE], RISCV_MMU_GET_PAGE_TABLE_INDEX((uintptr_t)_init_end, KILO_PAGE), true, true, false, virt_cap));
-      memcpy(_init_end, section_data + offset, KILO_PAGE_SIZE);
+
+      size_t chunk_size = KILO_PAGE_SIZE;
+      if (offset + chunk_size > program_headers[i].file_size) {
+        chunk_size = program_headers[i].file_size - offset;
+      }
+      memcpy(_init_end, section_data + offset, chunk_size);
+
       unwrap_sysret(sys_page_table_cap_remap_page(page_table_cap,
                                                   RISCV_MMU_GET_PAGE_TABLE_INDEX(program_headers[i].virtual_address + offset, KILO_PAGE),
                                                   readable,
@@ -147,7 +158,7 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
 
   unwrap_sysret(sys_task_cap_delegate_cap(task, page_table_cap));
 
-  heap_start = (heap_start + (512 * 0x1000) - 1) / (512 * 0x1000) * (512 * 0x1000);
+  heap_start = (heap_start + MEGA_PAGE_SIZE - 1) / MEGA_PAGE_SIZE * MEGA_PAGE_SIZE;
 
   const uintptr_t stack_va = unwrap_sysret(sys_system_user_space_end()) - KILO_PAGE_SIZE;
 
