@@ -4,13 +4,15 @@
 #include <service/mm.h>
 
 bool mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_root) {
-  assert(unwrap_sysret(sys_task_cap_switch(mm_ep_cap)) == CAP_ENDPOINT);
+  assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
   assert(unwrap_sysret(sys_cap_type(task_cap)) == CAP_TASK);
+
+  task_cap_t copied_task_cap = unwrap_sysret(sys_task_cap_copy(task_cap));
 
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = task_cap;
+  msg_buf.data[0]         = copied_task_cap;
 
   msg_buf.data_part_length = 2;
   msg_buf.data[1]          = MM_MSG_TYPE_ATTACH;
@@ -22,13 +24,15 @@ bool mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_roo
 }
 
 bool mm_detach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap) {
-  assert(unwrap_sysret(sys_task_cap_switch(mm_ep_cap)) == CAP_ENDPOINT);
+  assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
   assert(unwrap_sysret(sys_cap_type(task_cap)) == CAP_TASK);
+
+  task_cap_t copied_task_cap = unwrap_sysret(sys_task_cap_copy(task_cap));
 
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = task_cap;
+  msg_buf.data[0]         = copied_task_cap;
 
   msg_buf.data_part_length = 1;
   msg_buf.data[1]          = MM_MSG_TYPE_DETACH;
@@ -82,7 +86,7 @@ mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size) {
 }
 
 void mm_revoke(endpoint_cap_t mm_ep_cap, mem_cap_t mem_cap) {
-  assert(unwrap_sysret(sys_task_cap_switch(mm_ep_cap)) == CAP_ENDPOINT);
+  assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
   assert(unwrap_sysret(sys_cap_type(mem_cap)) == CAP_MEM);
 
   message_buffer_t msg_buf = {};
