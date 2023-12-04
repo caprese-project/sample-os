@@ -16,6 +16,9 @@ extern "C" {
 
   extern task_cap_t     __this_task_cap;
   extern endpoint_cap_t __apm_ep_cap;
+  extern endpoint_cap_t __mm_ep_cap;
+  extern uintptr_t      __brk_start;
+  extern uintptr_t      __brk_pos;
 
 #ifdef __cplusplus
 } // extern "C"

@@ -10,11 +10,13 @@
 extern "C" {
 #endif // __cplusplus
 
-  bool      mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_root);
-  bool      mm_detach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap);
+  id_cap_t  mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_root);
+  bool      mm_detach(endpoint_cap_t mm_ep_cap, id_cap_t id_cap);
+  uintptr_t mm_sbrk(endpoint_cap_t mm_ep_cap, id_cap_t id_cap, intptr_t increment);
+
   mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int flags);
   mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size);
-  void      mm_revoke(endpoint_cap_t mm_ep_cap, mem_cap_t mem_cap);
+  bool      mm_revoke(endpoint_cap_t mm_ep_cap, mem_cap_t mem_cap);
 
 #ifdef __cplusplus
 } // extern "C"

@@ -1,12 +1,11 @@
 #include <apm/elf.h>
 #include <apm/task.h>
+#include <crt/global.h>
 #include <libcaprese/syscall.h>
 #include <service/mm.h>
 
-extern endpoint_cap_t mm_ep_cap;
-
 task_cap_t create_task(const char* elf, size_t elf_size) {
-  mem_cap_t mem_cap = mm_fetch(mm_ep_cap, KILO_PAGE_SIZE * 5, KILO_PAGE_SIZE, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(__mm_ep_cap, KILO_PAGE_SIZE * 5, KILO_PAGE_SIZE, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
   if (mem_cap == 0) {
     return 0;
   }

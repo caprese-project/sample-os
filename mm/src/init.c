@@ -57,7 +57,7 @@ static mem_cap_t fetch_mem_cap(uintptr_t dtb_start, uintptr_t dtb_end, size_t si
 
 endpoint_cap_t init(endpoint_cap_t init_task_ep_cap, uintptr_t heap_root) {
   message_buffer_t msg_buf;
-  sys_endpoint_cap_receive(init_task_ep_cap, &msg_buf);
+  unwrap_sysret(sys_endpoint_cap_receive(init_task_ep_cap, &msg_buf));
 
   uintptr_t dtb_start = msg_buf.data[msg_buf.cap_part_length + 0];
   uintptr_t dtb_end   = msg_buf.data[msg_buf.cap_part_length + 1];
@@ -107,7 +107,7 @@ endpoint_cap_t init(endpoint_cap_t init_task_ep_cap, uintptr_t heap_root) {
   msg_buf.cap_part_length  = 1;
   msg_buf.data_part_length = 0;
   msg_buf.data[0]          = ep_cap_copy;
-  sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf);
+  unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
 
   return ep_cap;
 }
