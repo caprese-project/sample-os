@@ -35,7 +35,7 @@ mem_cap_t fetch_mem_cap(root_boot_info_t* root_boot_info, bool device, bool read
     uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->mem_caps[i]));
     uintptr_t size_bit  = unwrap_sysret(sys_mem_cap_size_bit(root_boot_info->mem_caps[i]));
     uintptr_t mem_size  = 1 << size_bit;
-    uintptr_t end = phys_addr + mem_size;
+    uintptr_t end       = phys_addr + mem_size;
 
     if (phys_addr <= root_boot_info->arch_info.dtb_start && root_boot_info->arch_info.dtb_start < end) {
       continue;
@@ -50,6 +50,9 @@ mem_cap_t fetch_mem_cap(root_boot_info_t* root_boot_info, bool device, bool read
     uintptr_t base_addr = phys_addr + used_size;
     if (alignment > 0) {
       base_addr = (base_addr + alignment - 1) / alignment * alignment;
+    }
+    if (base_addr >= end) {
+      continue;
     }
     size_t rem_size = mem_size - (base_addr - phys_addr);
 

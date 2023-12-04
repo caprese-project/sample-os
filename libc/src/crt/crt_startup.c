@@ -9,9 +9,9 @@ void __crt_cleanup() {
   }
 }
 
-int __crt_startup(task_cap_t this_task_cap, endpoint_cap_t apm_ep_cap) {
-  __this_task_cap = this_task_cap;
-  __apm_ep_cap    = apm_ep_cap;
+int __crt_startup() {
+  __this_task_cap = __init_context.__arg_regs[2];
+  __apm_ep_cap    = __init_context.__arg_regs[3];
 
   __if_unlikely (atexit(__crt_cleanup) != 0) {
     return 1;

@@ -1,5 +1,5 @@
-#ifndef SERVICE_MM_H_
-#define SERVICE_MM_H_
+#ifndef LIBC_SERVICE_MM_H_
+#define LIBC_SERVICE_MM_H_
 
 #include <libcaprese/cap.h>
 #include <mm/ipc.h>
@@ -22,4 +22,4 @@ extern "C" {
 } // extern "C"
 #endif // __cplusplus
 
-#endif // SERVICE_MM_H_
+#endif // LIBC_SERVICE_MM_H_

@@ -1,4 +1,5 @@
 #include <crt/global.h>
+#include <crt/heap.h>
 #include <internal/attribute.h>
 #include <internal/branch.h>
 #include <libcaprese/syscall.h>
@@ -16,13 +17,15 @@ void* __alloc(void* ptr, size_t size, size_t alignment) {
     return NULL;
   }
 
-  __if_unlikely (alignment < sizeof(max_align_t)) {
-    alignment = sizeof(max_align_t);
-  }
+  ptr = __heap_alloc(size + alignment);
 
   return ptr;
 }
 
 void free(void* ptr) {
-  (void)ptr;
+  __if_unlikely (ptr == NULL) {
+    return;
+  }
+
+  __heap_free(ptr);
 }

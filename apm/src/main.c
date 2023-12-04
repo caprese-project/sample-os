@@ -8,7 +8,8 @@
 extern const char _plic_elf_start[];
 extern const char _plic_elf_end[];
 
-int main(endpoint_cap_t mm_ep_cap) {
+int main() {
+  endpoint_cap_t mm_ep_cap = 0;
   __mm_ep_cap = mm_ep_cap;
 
   task_cap_t plic_task_cap = create_task(_plic_elf_start, _plic_elf_end - _plic_elf_start);

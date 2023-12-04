@@ -17,7 +17,6 @@ set(
   -gdwarf-2
   -MD
   -mcmodel=medany
-  -ffreestanding
   -fno-common
   -mno-relax
   -fno-stack-protector
@@ -50,7 +49,6 @@ add_subdirectory(dev)
 add_subdirectory(fs)
 
 add_subdirectory(libc)
-add_subdirectory(service)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
   set(CONFIG_LOG_LEVEL all)

@@ -2,6 +2,8 @@
 .type __global_pointer$, @object
 .extern __crt_startup
 .type __crt_startup, @function
+.extern __init_context
+.type __init_context, @object
 .extern main
 .type main, @function
 .extern exit
@@ -19,19 +21,22 @@ _start:
       addi  gp, gp, %pcrel_lo(1b)
   .option pop
 
-  # a0: argc
-  # a1: argv
-  # s0: this task cap
-  # s1: apm ep cap
+  la t0, __init_context
+  sd a0, 0(t0)
+  sd a1, 8(t0)
+  sd a2, 16(t0)
+  sd a3, 24(t0)
+  sd a4, 32(t0)
+  sd a5, 40(t0)
+  sd a6, 48(t0)
+  sd a7, 56(t0)
 
-  mv s2, a0
-  mv s3, a1
-  mv a0, s0
-  mv a1, s1
+  mv s0, a0
+  mv s1, a1
   call __crt_startup
   bnez a0, exit_phase
-  mv a0, s2
-  mv a1, s3
+  mv a0, s0
+  mv a1, s1
   call main
 
 exit_phase:

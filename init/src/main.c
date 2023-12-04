@@ -21,7 +21,9 @@ static endpoint_cap_t create_ep_cap(root_boot_info_t* root_boot_info) {
   return unwrap_sysret(sys_mem_cap_create_endpoint_object(ep_mem_cap));
 }
 
-int main(root_boot_info_t* root_boot_info) {
+int main() {
+  root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
+
   __this_task_cap = root_boot_info->root_task_cap;
 
   uintptr_t  mm_heap_root;
@@ -73,8 +75,8 @@ int main(root_boot_info_t* root_boot_info) {
 
   sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, mm_ep_cap_dst);
 
-  sys_task_cap_resume(apm_task_cap);
-  sys_task_cap_switch(apm_task_cap);
+  // sys_task_cap_resume(apm_task_cap);
+  // sys_task_cap_switch(apm_task_cap);
 
   while (true) {
     sys_system_yield();

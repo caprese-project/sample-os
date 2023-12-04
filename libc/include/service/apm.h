@@ -1,5 +1,5 @@
-#ifndef SERVICE_APM_H_
-#define SERVICE_APM_H_
+#ifndef LIBC_SERVICE_APM_H_
+#define LIBC_SERVICE_APM_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,4 +9,4 @@ extern "C" {
 } // extern "C"
 #endif // __cplusplus
 
-#endif // SERVICE_APM_H_
+#endif // LIBC_SERVICE_APM_H_
