@@ -42,11 +42,11 @@ int main() {
   endpoint_cap_t ep_cap_copy = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
   endpoint_cap_t ep_cap_dst  = unwrap_sysret(sys_task_cap_transfer_cap(mm_task_cap, ep_cap_copy));
 
-  sys_task_cap_set_reg(mm_task_cap, REG_ARG_0, ep_cap_dst);
-  sys_task_cap_set_reg(mm_task_cap, REG_ARG_1, mm_heap_root);
+  unwrap_sysret(sys_task_cap_set_reg(mm_task_cap, REG_ARG_0, ep_cap_dst));
+  unwrap_sysret(sys_task_cap_set_reg(mm_task_cap, REG_ARG_1, mm_heap_root));
 
-  sys_task_cap_resume(mm_task_cap);
-  sys_task_cap_switch(mm_task_cap);
+  unwrap_sysret(sys_task_cap_resume(mm_task_cap));
+  unwrap_sysret(sys_task_cap_switch(mm_task_cap));
 
   message_buffer_t msg_buf;
   msg_buf.cap_part_length = root_boot_info->num_mem_caps;
@@ -56,9 +56,9 @@ int main() {
   msg_buf.data_part_length                       = 2;
   msg_buf.data[root_boot_info->num_mem_caps + 0] = root_boot_info->arch_info.dtb_start;
   msg_buf.data[root_boot_info->num_mem_caps + 1] = root_boot_info->arch_info.dtb_end;
-  sys_endpoint_cap_send_long(ep_cap, &msg_buf);
+  unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, &msg_buf));
 
-  sys_endpoint_cap_receive(ep_cap, &msg_buf);
+  unwrap_sysret(sys_endpoint_cap_receive(ep_cap, &msg_buf));
 
   if (msg_buf.cap_part_length != 1) {
     abort();
@@ -69,17 +69,22 @@ int main() {
     abort();
   }
 
-  mm_attach(mm_ep_cap, apm_task_cap, apm_heap_root);
+  id_cap_t apm_mm_id_cap = mm_attach(mm_ep_cap, apm_task_cap, apm_heap_root);
+  if (apm_mm_id_cap == 0) {
+    abort();
+  }
 
   endpoint_cap_t mm_ep_cap_dst = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, mm_ep_cap));
+  id_cap_t apm_mm_id_cap_dst = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, apm_mm_id_cap));
 
-  sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, mm_ep_cap_dst);
+  unwrap_sysret(sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, mm_ep_cap_dst));
+  unwrap_sysret(sys_task_cap_set_reg(apm_task_cap, REG_ARG_1, apm_mm_id_cap_dst));
 
-  // sys_task_cap_resume(apm_task_cap);
-  // sys_task_cap_switch(apm_task_cap);
+  unwrap_sysret(sys_task_cap_resume(apm_task_cap));
+  unwrap_sysret(sys_task_cap_switch(apm_task_cap));
 
   while (true) {
-    sys_system_yield();
+    unwrap_sysret(sys_system_yield());
   }
 
   return 0;

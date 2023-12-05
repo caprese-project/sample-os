@@ -184,8 +184,8 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
   task_cap_t copy_task = unwrap_sysret(sys_task_cap_copy(task));
   task_cap_t dst_task  = unwrap_sysret(sys_task_cap_transfer_cap(task, copy_task));
 
-  unwrap_sysret(sys_task_cap_set_reg(task, ARCH_REG_S0, dst_task));
-  unwrap_sysret(sys_task_cap_set_reg(task, ARCH_REG_S1, 0));
+  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_2, dst_task));
+  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_3, 0));
 
   if (heap_root) {
     *heap_root = heap_start;
