@@ -1,45 +1,52 @@
 #include <cassert>
 #include <libcaprese/syscall.h>
 #include <mm/ipc.h>
+#include <mm/memory_manager.h>
 #include <mm/server.h>
+#include <mm/task_table.h>
 
 namespace {
   void attach(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_ATTACH);
 
-    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) {
+    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    task_cap_t task_cap  = msg_buf->data[0];
-    uintptr_t  heap_root = msg_buf->data[msg_buf->cap_part_length + 1];
+    task_cap_t       task_cap            = msg_buf->data[0];
+    page_table_cap_t root_page_table_cap = msg_buf->data[1];
+    uintptr_t        heap_root           = msg_buf->data[msg_buf->cap_part_length + 1];
 
-    if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK) {
+    if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK || unwrap_sysret(sys_cap_type(root_page_table_cap)) != CAP_PAGE_TABLE) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    (void)task_cap;
-    (void)heap_root;
+    id_cap_t id_cap = unwrap_sysret(sys_id_cap_create());
 
-    id_cap_t id_cap        = unwrap_sysret(sys_id_cap_create());
-    id_cap_t copied_id_cap = unwrap_sysret(sys_id_cap_copy(id_cap));
+    int result = attach_task(id_cap, task_cap, root_page_table_cap, heap_root, heap_root);
 
-    // TODO: impl
+    if (result == MM_CODE_S_OK) [[likely]] {
+      id_cap_t copied_id_cap = unwrap_sysret(sys_id_cap_copy(id_cap));
 
-    msg_buf->cap_part_length  = 1;
-    msg_buf->data_part_length = 1;
-    msg_buf->data[0]          = copied_id_cap;
-    msg_buf->data[1]          = MM_CODE_S_OK;
+      msg_buf->cap_part_length  = 1;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = copied_id_cap;
+      msg_buf->data[1]          = MM_CODE_S_OK;
+    } else {
+      msg_buf->cap_part_length  = 0;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = result;
+    }
   }
 
   void detach(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_DETACH);
 
-    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 1) {
+    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 1) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -47,23 +54,21 @@ namespace {
 
     id_cap_t id_cap = msg_buf->data[msg_buf->cap_part_length];
 
-    if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) {
+    if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    // TODO: impl
-
     msg_buf->cap_part_length  = 0;
     msg_buf->data_part_length = 1;
-    msg_buf->data[0]          = MM_CODE_S_OK;
+    msg_buf->data[0]          = detach_task(id_cap);
   }
 
   void sbrk(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_SBRK);
 
-    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) {
+    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -72,26 +77,21 @@ namespace {
     id_cap_t id_cap    = msg_buf->data[0];
     intptr_t increment = msg_buf->data[msg_buf->cap_part_length + 1];
 
-    if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) {
+    if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    (void)id_cap;
-    (void)increment;
-
-    // TODO: impl
-
     msg_buf->cap_part_length  = 0;
     msg_buf->data_part_length = 1;
-    msg_buf->data[0]          = MM_CODE_S_OK;
+    msg_buf->data[0]          = sbrk_task(id_cap, increment, &msg_buf->data[1]);
   }
 
   void fetch(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_FETCH);
 
-    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 4) {
+    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 4) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -101,13 +101,15 @@ namespace {
     size_t   alignment = msg_buf->data[2];
     uint32_t flags     = msg_buf->data[3];
 
-    (void)size;
-    (void)alignment;
-    (void)flags;
-
-    // TODO: impl
+    mem_cap_t mem_cap = fetch_mem_cap(size, alignment, flags);
+    if (mem_cap == 0) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
+      return;
+    }
 
     msg_buf->cap_part_length  = 1;
+    msg_buf->data[0]          = mem_cap;
     msg_buf->data_part_length = 1;
     msg_buf->data[1]          = MM_CODE_S_OK;
   }
@@ -115,7 +117,7 @@ namespace {
   void retrieve(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_RETRIEVE);
 
-    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) {
+    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -124,8 +126,17 @@ namespace {
     uintptr_t addr = msg_buf->data[1];
     size_t    size = msg_buf->data[2];
 
-    (void)addr;
-    (void)size;
+    mem_cap_t mem_cap = retrieve_mem_cap(addr, size);
+    if (mem_cap == 0) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
+      return;
+    }
+
+    msg_buf->cap_part_length  = 1;
+    msg_buf->data[0]          = mem_cap;
+    msg_buf->data_part_length = 1;
+    msg_buf->data[1]          = MM_CODE_S_OK;
 
     // for (size_t i = 0; i < num_mem_caps; ++i) {
     //   uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(mem_caps[i]));
@@ -142,7 +153,25 @@ namespace {
 
   void revoke(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_REVOKE);
-    (void)msg_buf;
+
+    if (msg_buf->cap_part_length != 1) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    mem_cap_t mem_cap = msg_buf->data[0];
+    if (unwrap_sysret(sys_cap_type(mem_cap)) != CAP_MEM) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    revoke_mem_cap(mem_cap);
+
+    msg_buf->cap_part_length  = 0;
+    msg_buf->data_part_length = 1;
+    msg_buf->data[0]          = MM_CODE_S_OK;
   }
 
   void proc_msg(message_buffer_t* msg_buf) {

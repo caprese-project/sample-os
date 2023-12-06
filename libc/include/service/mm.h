@@ -10,7 +10,7 @@
 extern "C" {
 #endif // __cplusplus
 
-  id_cap_t  mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, uintptr_t heap_root);
+  id_cap_t  mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, page_table_cap_t root_page_table_cap, uintptr_t heap_root);
   bool      mm_detach(endpoint_cap_t mm_ep_cap, id_cap_t id_cap);
   uintptr_t mm_sbrk(endpoint_cap_t mm_ep_cap, id_cap_t id_cap, intptr_t increment);
 

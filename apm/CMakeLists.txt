@@ -11,7 +11,7 @@ target_sources(
 )
 
 target_compile_features(apm PRIVATE c_std_17)
-target_compile_options(apm PRIVATE ${CONFIG_C_OPTIONS})
+target_compile_options(apm PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(apm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

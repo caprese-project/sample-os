@@ -4,7 +4,7 @@
 #include <libcaprese/syscall.h>
 #include <stdbool.h>
 
-task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t elf_size, uintptr_t* heap_root) {
+task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t elf_size, page_table_cap_t* root_page_table, uintptr_t* heap_root) {
   mem_cap_t mem_cap = fetch_mem_cap(root_boot_info, false, true, true, false, KILO_PAGE_SIZE * 5, KILO_PAGE_SIZE);
 
   cap_space_cap_t  cap_space_cap         = unwrap_sysret(sys_mem_cap_create_cap_space_object(mem_cap));
@@ -18,7 +18,12 @@ task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t
     return 0;
   }
 
-  unwrap_sysret(sys_task_cap_transfer_cap(task_cap, root_page_table_cap));
+  if (root_page_table != NULL) {
+    *root_page_table = root_page_table_cap;
+  } else {
+    unwrap_sysret(sys_task_cap_transfer_cap(task_cap, root_page_table_cap));
+  }
+
   unwrap_sysret(sys_task_cap_transfer_cap(task_cap, cap_space_cap));
   unwrap_sysret(sys_task_cap_transfer_cap(task_cap, cap_space_page_table0));
   unwrap_sysret(sys_task_cap_transfer_cap(task_cap, cap_space_page_table1));

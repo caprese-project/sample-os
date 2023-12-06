@@ -8,7 +8,7 @@ project(
 )
 
 set(
-  CONFIG_C_OPTIONS
+  CONFIG_COMPILE_OPTIONS
   -Wall
   -Wextra
   -Werror
@@ -25,6 +25,7 @@ set(
   -no-pie
   $<IF:$<CONFIG:Debug>,-O0,-O3>
   $<IF:$<CONFIG:Debug>,-g3,-g0>
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
 )
 
 set(GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -32,7 +33,7 @@ file(MAKE_DIRECTORY ${GENERATE_DIR})
 
 include(FetchContent)
 
-set(LIBCAPRESE_COMPILE_OPTIONS ${CONFIG_C_OPTIONS})
+set(LIBCAPRESE_COMPILE_OPTIONS ${CONFIG_COMPILE_OPTIONS})
 
 FetchContent_Declare(
   libcaprese

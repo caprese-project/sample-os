@@ -51,9 +51,13 @@ __weak void* __heap_alloc(size_t size) {
   } while (header != __heap_block_free_list);
 
   __heap_block_header_t* new_header = __heap_sbrk();
-  new_header->next                  = __heap_block_free_list;
-  new_header->size                  = MEGA_PAGE_SIZE - sizeof(__heap_block_header_t);
-  prev->next                        = new_header;
+  __if_unlikely (new_header == NULL) {
+    return NULL;
+  }
+
+  new_header->next = __heap_block_free_list;
+  new_header->size = MEGA_PAGE_SIZE - sizeof(__heap_block_header_t);
+  prev->next       = new_header;
 
   __heap_split(new_header, size);
   new_header->size |= 1;
@@ -75,5 +79,13 @@ __weak void __heap_free(void* ptr) {
 }
 
 __weak void* __heap_sbrk() {
-  return (void*)mm_sbrk(__mm_ep_cap, __mm_id_cap, MEGA_PAGE_SIZE);
+  uintptr_t new_brk_pos = mm_sbrk(__mm_ep_cap, __mm_id_cap, MEGA_PAGE_SIZE);
+  __if_unlikely (new_brk_pos == (uintptr_t)-1) {
+    return NULL;
+  }
+
+  uintptr_t result = __brk_pos;
+  __brk_pos        = new_brk_pos;
+
+  return (void*)result;
 }

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(LIBC_COMPILE_OPTIONS ${CONFIG_C_OPTIONS})
+set(LIBC_COMPILE_OPTIONS ${CONFIG_COMPILE_OPTIONS})
 
 FetchContent_Declare(
   caprese_libc
@@ -27,8 +27,8 @@ target_sources(
 )
 
 target_compile_features(libc PRIVATE c_std_17)
-target_compile_options(libc PRIVATE ${CONFIG_C_OPTIONS})
+target_compile_options(libc PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(libc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${ROOT_DIR}/mm/include)
 
-target_link_libraries(libc PUBLIC caprese_libc libcaprese)
+target_link_libraries(libc PUBLIC caprese_libc caprese_libcxx libcaprese)

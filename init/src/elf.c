@@ -109,48 +109,44 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
       return false;
     }
 
-    bool      readable     = (program_headers[i].flags & ELF_PH_FLAG_READABLE) != 0;
-    bool      writable     = (program_headers[i].flags & ELF_PH_FLAG_WRITABLE) != 0;
-    bool      executable   = (program_headers[i].flags & ELF_PH_FLAG_EXECUTABLE) != 0;
-    size_t    va_offset    = program_headers[i].virtual_address % KILO_PAGE_SIZE;
-    size_t    mem_cap_size = (KILO_PAGE_SIZE - va_offset) % KILO_PAGE_SIZE + program_headers[i].memory_size;
-    mem_cap_t mem_cap      = fetch_mem_cap(root_boot_info, false, readable, writable, executable, mem_cap_size, KILO_PAGE_SIZE);
+    bool readable   = (program_headers[i].flags & ELF_PH_FLAG_READABLE) != 0;
+    bool writable   = (program_headers[i].flags & ELF_PH_FLAG_WRITABLE) != 0;
+    bool executable = (program_headers[i].flags & ELF_PH_FLAG_EXECUTABLE) != 0;
 
-    if (mem_cap == 0) {
-      return false;
-    }
+    uintptr_t va_start  = program_headers[i].virtual_address / KILO_PAGE_SIZE * KILO_PAGE_SIZE;
+    uintptr_t va_end    = (program_headers[i].virtual_address + program_headers[i].memory_size + KILO_PAGE_SIZE - 1) / KILO_PAGE_SIZE * KILO_PAGE_SIZE;
+    size_t    va_offset = program_headers[i].virtual_address % KILO_PAGE_SIZE;
 
     const char* section_data = (const char*)data + program_headers[i].offset;
 
-    for (size_t offset = 0; offset < program_headers[i].file_size; offset += KILO_PAGE_SIZE) {
-      virt_page_cap_t virt_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, KILO_PAGE));
-
-      unwrap_sysret(sys_page_table_cap_map_page(root_boot_info->page_table_caps[KILO_PAGE], get_page_table_index((uintptr_t)_init_end, KILO_PAGE), true, true, false, virt_cap));
-
-      size_t chunk_size = KILO_PAGE_SIZE;
-      if (offset + chunk_size > program_headers[i].file_size) {
-        chunk_size = program_headers[i].file_size - offset;
+    for (uintptr_t va = va_start; va < va_end; va += KILO_PAGE_SIZE) {
+      mem_cap_t mem_cap = fetch_mem_cap(root_boot_info, false, readable, writable, executable, KILO_PAGE_SIZE, KILO_PAGE_SIZE);
+      if (mem_cap == 0) {
+        return false;
       }
-      memcpy(_init_end, section_data + offset, chunk_size);
 
-      unwrap_sysret(sys_page_table_cap_remap_page(page_table_cap,
-                                                  get_page_table_index(program_headers[i].virtual_address + offset, KILO_PAGE),
-                                                  readable,
-                                                  writable,
-                                                  executable,
-                                                  virt_cap,
-                                                  root_boot_info->page_table_caps[KILO_PAGE]));
-      unwrap_sysret(sys_task_cap_delegate_cap(task, virt_cap));
-    }
-
-    size_t file_offset = (program_headers[i].file_size + KILO_PAGE_SIZE - 1) / KILO_PAGE_SIZE * KILO_PAGE_SIZE;
-    for (size_t offset = file_offset; offset < program_headers[i].memory_size; offset += KILO_PAGE_SIZE) {
       virt_page_cap_t virt_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, KILO_PAGE));
-      unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(program_headers[i].virtual_address + offset, KILO_PAGE), readable, writable, executable, virt_cap));
+
+      size_t offset = va - va_start;
+
+      if (offset < (program_headers[i].file_size + va_offset)) {
+        size_t interval_start = va == va_start ? va_offset : 0;
+        size_t interval_end   = KILO_PAGE_SIZE;
+
+        if (offset + interval_end > (program_headers[i].file_size + va_offset)) {
+          interval_end = (program_headers[i].file_size + va_offset) - offset;
+        }
+
+        unwrap_sysret(sys_page_table_cap_map_page(root_boot_info->page_table_caps[KILO_PAGE], get_page_table_index((uintptr_t)_init_end, KILO_PAGE), true, true, false, virt_cap));
+        memcpy(_init_end + interval_start, section_data + offset, interval_end - interval_start);
+        unwrap_sysret(sys_page_table_cap_remap_page(page_table_cap, get_page_table_index(va, KILO_PAGE), readable, writable, executable, virt_cap, root_boot_info->page_table_caps[KILO_PAGE]));
+      } else {
+        unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(va, KILO_PAGE), readable, writable, executable, virt_cap));
+      }
+
       unwrap_sysret(sys_task_cap_delegate_cap(task, virt_cap));
     }
 
-    uintptr_t va_end = program_headers[i].virtual_address + program_headers[i].memory_size;
     if (heap_start < va_end) {
       heap_start = va_end;
     }

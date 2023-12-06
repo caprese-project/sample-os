@@ -1,19 +1,31 @@
 #include <crt/global.h>
 #include <crt/heap.h>
+#include <cstdlib>
 #include <iterator>
 #include <libcaprese/syscall.h>
+#include <mm/ipc.h>
 #include <mm/server.h>
+#include <mm/task_table.h>
+
+namespace {
+  id_cap_t __this_id_cap;
+} // namespace
 
 extern "C" {
   void* __heap_sbrk() {
-    return NULL;
+    uintptr_t brk_pos = __brk_pos;
+
+    if (sbrk_task(__this_id_cap, MEGA_PAGE_SIZE, &__brk_pos) != MM_CODE_S_OK) {
+      return nullptr;
+    }
+
+    return reinterpret_cast<void*>(brk_pos);
   }
 }
 
 namespace {
-  bool load_page_table_caps(page_table_cap_t (&dst)[4], uintptr_t user_space_end) {
+  bool load_page_table_caps(page_table_cap_t (&dst)[4], int& max_page_level, uintptr_t user_space_end) {
     uintptr_t mmu_mode = unwrap_sysret(sys_arch_mmu_mode());
-    int       max_page_level;
 
     switch (mmu_mode) {
       case RISCV_MMU_SV39:
@@ -133,6 +145,18 @@ namespace {
 
     return true;
   }
+
+  void attach_self(page_table_cap_t (&page_table_caps)[4], int max_page_level) {
+    assert(max_page_level < 4);
+
+    __this_id_cap = unwrap_sysret(sys_id_cap_create());
+
+    int result = attach_task(__this_id_cap, __this_task_cap, page_table_caps[max_page_level], __brk_start, __brk_pos);
+
+    if (result != MM_CODE_S_OK) {
+      abort();
+    }
+  }
 } // namespace
 
 int main() {
@@ -155,7 +179,8 @@ int main() {
   uintptr_t user_space_end = unwrap_sysret(sys_system_user_space_end());
 
   page_table_cap_t page_table_caps[4] = {};
-  if (!load_page_table_caps(page_table_caps, user_space_end)) {
+  int              max_page_level;
+  if (!load_page_table_caps(page_table_caps, max_page_level, user_space_end)) {
     return 1;
   }
 
@@ -174,6 +199,8 @@ int main() {
   msg_buf.data_part_length = 0;
   msg_buf.data[0]          = ep_cap_copy;
   unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
+
+  attach_self(page_table_caps, max_page_level);
 
   run(ep_cap);
 }

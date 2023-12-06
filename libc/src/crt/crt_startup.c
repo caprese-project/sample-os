@@ -17,12 +17,12 @@ int __crt_startup() {
     return 1;
   }
 
-  for (void (**constructor)() = __init_array_start; constructor != __init_array_end; ++constructor) {
-    (*constructor)();
-  }
-
   if (__apm_ep_cap != 0) {
     // TODO
+  }
+
+  for (void (**constructor)() = __init_array_start; constructor != __init_array_end; ++constructor) {
+    (*constructor)();
   }
 
   return 0;
