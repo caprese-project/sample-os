@@ -15,7 +15,7 @@ extern "C" {
   uintptr_t mm_sbrk(endpoint_cap_t mm_ep_cap, id_cap_t id_cap, intptr_t increment);
 
   mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int flags);
-  mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size);
+  mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size, int flags);
   bool      mm_revoke(endpoint_cap_t mm_ep_cap, mem_cap_t mem_cap);
 
 #ifdef __cplusplus

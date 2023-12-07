@@ -124,17 +124,18 @@ mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int 
   return msg_buf.data[0];
 }
 
-mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size) {
+mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size, int flags) {
   assert(unwrap_sysret(sys_cap_type(mm_ep_cap)) == CAP_ENDPOINT);
 
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 0;
 
-  msg_buf.data_part_length = 3;
+  msg_buf.data_part_length = 4;
   msg_buf.data[0]          = MM_MSG_TYPE_RETRIEVE;
   msg_buf.data[1]          = addr;
   msg_buf.data[2]          = size;
+  msg_buf.data[3]          = flags;
 
   sysret_t sysret = sys_endpoint_cap_call(mm_ep_cap, &msg_buf);
 

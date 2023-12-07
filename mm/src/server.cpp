@@ -117,16 +117,17 @@ namespace {
   void retrieve(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_RETRIEVE);
 
-    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) [[unlikely]] {
+    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 4) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    uintptr_t addr = msg_buf->data[1];
-    size_t    size = msg_buf->data[2];
+    uintptr_t addr  = msg_buf->data[1];
+    size_t    size  = msg_buf->data[2];
+    int       flags = msg_buf->data[3];
 
-    mem_cap_t mem_cap = retrieve_mem_cap(addr, size);
+    mem_cap_t mem_cap = retrieve_mem_cap(addr, size, flags);
     if (mem_cap == 0) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
@@ -137,18 +138,6 @@ namespace {
     msg_buf->data[0]          = mem_cap;
     msg_buf->data_part_length = 1;
     msg_buf->data[1]          = MM_CODE_S_OK;
-
-    // for (size_t i = 0; i < num_mem_caps; ++i) {
-    //   uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(mem_caps[i]));
-    //   size_t    mem_size  = 1 << unwrap_sysret(sys_mem_cap_size_bit(mem_caps[i]));
-    //   uintptr_t used_size = unwrap_sysret(sys_mem_cap_used_size(mem_caps[i]));
-    //   uintptr_t start     = phys_addr + used_size;
-    //   uintptr_t end       = phys_addr + mem_size;
-
-    //   if (start <= addr && addr + size <= end) {
-    //     msg_buf->data[0] = mem_caps[i];
-    //   }
-    // }
   }
 
   void revoke(message_buffer_t* msg_buf) {

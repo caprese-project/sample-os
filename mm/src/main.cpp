@@ -4,6 +4,7 @@
 #include <iterator>
 #include <libcaprese/syscall.h>
 #include <mm/ipc.h>
+#include <mm/memory_manager.h>
 #include <mm/server.h>
 #include <mm/task_table.h>
 
@@ -201,6 +202,15 @@ int main() {
   unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
 
   attach_self(page_table_caps, max_page_level);
+
+  for (cap_t cap = 1;; ++cap) {
+    cap_type_t type = static_cast<cap_type_t>(unwrap_sysret(sys_cap_type(cap)));
+    if (type == CAP_MEM) {
+      register_mem_cap(cap);
+    } else if (type == CAP_NULL) {
+      break;
+    }
+  }
 
   run(ep_cap);
 }
