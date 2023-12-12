@@ -31,4 +31,4 @@ target_compile_options(libc PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(libc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${ROOT_DIR}/mm/include)
 
-target_link_libraries(libc PUBLIC caprese_libc caprese_libcxx libcaprese)
+target_link_libraries(libc PUBLIC caprese_libc caprese_libcxx libcaprese libcaprese++)

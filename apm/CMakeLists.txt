@@ -4,13 +4,15 @@ add_executable(apm)
 
 target_sources(
   apm PRIVATE
-  src/elf.c
-  src/main.c
+  src/elf_loader.cpp
+  src/main.cpp
+  src/program_loader.cpp
   src/section.s
-  src/task.c
+  src/task_manager.cpp
 )
 
 target_compile_features(apm PRIVATE c_std_17)
+target_compile_features(apm PRIVATE cxx_std_23)
 target_compile_options(apm PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(apm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

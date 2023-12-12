@@ -4,6 +4,6 @@
 #include <libcaprese/cap.h>
 #include <libcaprese/root_boot_info.h>
 
-task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t elf_size, page_table_cap_t* root_page_table, uintptr_t* heap_root);
+task_cap_t create_task(root_boot_info_t* root_boot_info, const char* elf, size_t elf_size, page_table_cap_t* root_page_table, bool alloc_stack, uintptr_t* heap_root);
 
 #endif // INIT_TASK_H_

@@ -27,14 +27,14 @@ int main() {
   __this_task_cap = root_boot_info->root_task_cap;
 
   uintptr_t  mm_heap_root;
-  task_cap_t mm_task_cap = create_task(root_boot_info, _mm_elf_start, _mm_elf_end - _mm_elf_start, NULL, &mm_heap_root);
+  task_cap_t mm_task_cap = create_task(root_boot_info, _mm_elf_start, _mm_elf_end - _mm_elf_start, NULL, true, &mm_heap_root);
   if (mm_task_cap == 0) {
     abort();
   }
 
   uintptr_t        apm_heap_root;
   page_table_cap_t apm_root_page_table;
-  task_cap_t       apm_task_cap = create_task(root_boot_info, _apm_elf_start, _apm_elf_end - _apm_elf_start, &apm_root_page_table, &apm_heap_root);
+  task_cap_t       apm_task_cap = create_task(root_boot_info, _apm_elf_start, _apm_elf_end - _apm_elf_start, &apm_root_page_table, false, &apm_heap_root);
   if (apm_task_cap == 0) {
     abort();
   }
@@ -65,17 +65,17 @@ int main() {
     abort();
   }
 
-  endpoint_cap_t mm_ep_cap = msg_buf.data[0];
-  if (unwrap_sysret(sys_cap_type(mm_ep_cap)) != CAP_ENDPOINT) {
+  __mm_ep_cap = msg_buf.data[0];
+  if (unwrap_sysret(sys_cap_type(__mm_ep_cap)) != CAP_ENDPOINT) {
     abort();
   }
 
-  id_cap_t apm_mm_id_cap = mm_attach(mm_ep_cap, apm_task_cap, apm_root_page_table, apm_heap_root);
+  id_cap_t apm_mm_id_cap = mm_attach(apm_task_cap, apm_root_page_table, 0, 0, 4 * KILO_PAGE_SIZE);
   if (apm_mm_id_cap == 0) {
     abort();
   }
 
-  endpoint_cap_t mm_ep_cap_dst     = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, mm_ep_cap));
+  endpoint_cap_t mm_ep_cap_dst     = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, __mm_ep_cap));
   id_cap_t       apm_mm_id_cap_dst = unwrap_sysret(sys_task_cap_transfer_cap(apm_task_cap, apm_mm_id_cap));
 
   unwrap_sysret(sys_task_cap_set_reg(apm_task_cap, REG_ARG_0, mm_ep_cap_dst));

@@ -8,19 +8,15 @@
 #include <mm/server.h>
 #include <mm/task_table.h>
 
-namespace {
-  id_cap_t __this_id_cap;
-} // namespace
+id_cap_t __this_id_cap;
 
 extern "C" {
   void* __heap_sbrk() {
-    uintptr_t brk_pos = __brk_pos;
-
-    if (sbrk_task(__this_id_cap, MEGA_PAGE_SIZE, &__brk_pos) != MM_CODE_S_OK) {
+    if (vmap_task(__this_id_cap, MEGA_PAGE, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, 0, nullptr, &__brk_pos) != MM_CODE_S_OK) {
       return nullptr;
     }
 
-    return reinterpret_cast<void*>(brk_pos);
+    return reinterpret_cast<void*>(__brk_pos);
   }
 }
 
@@ -152,7 +148,38 @@ namespace {
 
     __this_id_cap = unwrap_sysret(sys_id_cap_create());
 
-    int result = attach_task(__this_id_cap, __this_task_cap, page_table_caps[max_page_level], __brk_start, __brk_pos);
+    int result = attach_task(__this_id_cap, __this_task_cap, page_table_caps[max_page_level], 0, 0, KILO_PAGE_SIZE);
+
+    if (result != MM_CODE_S_OK) {
+      abort();
+    }
+
+    task_info& info = get_task_info(__this_id_cap);
+
+    for (cap_t cap = 1;; ++cap) {
+      cap_type_t type = static_cast<cap_type_t>(unwrap_sysret(sys_cap_type(cap)));
+      if (type == CAP_VIRT_PAGE) {
+        info.virt_page_caps[unwrap_sysret(sys_virt_page_cap_virt_addr(cap))] = cap;
+      } else if (type == CAP_PAGE_TABLE) {
+        int level = unwrap_sysret(sys_page_table_cap_level(cap));
+        if (level < max_page_level) {
+          info.page_table_caps[level][unwrap_sysret(sys_page_table_cap_virt_addr_base(cap))] = cap;
+        }
+      } else if (type == CAP_NULL) {
+        break;
+      }
+    }
+
+    for (auto& [level, caps] : info.page_table_caps) {
+      for (auto& [va_base, cap]: caps) {
+        assert(unwrap_sysret(sys_page_table_cap_virt_addr_base(cap)) == va_base);
+        (void)level;
+        (void)va_base;
+        [[maybe_unused]] auto i = unwrap_sysret(sys_system_null());
+      }
+    }
+
+    result = grow_stack(__this_id_cap, 4 * KILO_PAGE_SIZE);
 
     if (result != MM_CODE_S_OK) {
       abort();
@@ -201,8 +228,6 @@ int main() {
   msg_buf.data[0]          = ep_cap_copy;
   unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
 
-  attach_self(page_table_caps, max_page_level);
-
   for (cap_t cap = 1;; ++cap) {
     cap_type_t type = static_cast<cap_type_t>(unwrap_sysret(sys_cap_type(cap)));
     if (type == CAP_MEM) {
@@ -211,6 +236,8 @@ int main() {
       break;
     }
   }
+
+  attach_self(page_table_caps, max_page_level);
 
   run(ep_cap);
 }

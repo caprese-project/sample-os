@@ -10,13 +10,20 @@
 extern "C" {
 #endif // __cplusplus
 
-  id_cap_t  mm_attach(endpoint_cap_t mm_ep_cap, task_cap_t task_cap, page_table_cap_t root_page_table_cap, uintptr_t heap_root);
-  bool      mm_detach(endpoint_cap_t mm_ep_cap, id_cap_t id_cap);
-  uintptr_t mm_sbrk(endpoint_cap_t mm_ep_cap, id_cap_t id_cap, intptr_t increment);
+  id_cap_t  mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, size_t stack_available, size_t total_available, size_t stack_commit);
+  bool      mm_detach(id_cap_t id_cap);
+  uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base, virt_page_cap_t* dst);
+  uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr_t dst_va_base, virt_page_cap_t page_cap);
 
-  mem_cap_t mm_fetch(endpoint_cap_t mm_ep_cap, size_t size, size_t alignment, int flags);
-  mem_cap_t mm_retrieve(endpoint_cap_t mm_ep_cap, uintptr_t addr, size_t size, int flags);
-  bool      mm_revoke(endpoint_cap_t mm_ep_cap, mem_cap_t mem_cap);
+  mem_cap_t mm_fetch(size_t size, size_t alignment, int flags);
+  bool      mm_revoke(mem_cap_t mem_cap);
+
+  task_cap_t mm_fetch_and_create_task_object(
+      cap_space_cap_t cap_space_cap, page_table_cap_t root_page_table_cap, page_table_cap_t cap_space_page_table0, page_table_cap_t cap_space_page_table1, page_table_cap_t cap_space_page_table2);
+  endpoint_cap_t   mm_fetch_and_create_endpoint_object();
+  page_table_cap_t mm_fetch_and_create_page_table_object();
+  virt_page_cap_t  mm_fetch_and_create_virt_page_object(uintptr_t level);
+  cap_space_cap_t  mm_fetch_and_create_cap_space_object();
 
 #ifdef __cplusplus
 } // extern "C"

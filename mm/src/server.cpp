@@ -17,7 +17,9 @@ namespace {
 
     task_cap_t       task_cap            = msg_buf->data[0];
     page_table_cap_t root_page_table_cap = msg_buf->data[1];
-    uintptr_t        heap_root           = msg_buf->data[msg_buf->cap_part_length + 1];
+    size_t           stack_available     = msg_buf->data[msg_buf->cap_part_length + 1];
+    size_t           total_available     = msg_buf->data[msg_buf->cap_part_length + 2];
+    size_t           stack_commit        = msg_buf->data[msg_buf->cap_part_length + 3];
 
     if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK || unwrap_sysret(sys_cap_type(root_page_table_cap)) != CAP_PAGE_TABLE) [[unlikely]] {
       msg_buf->data_part_length               = 1;
@@ -27,7 +29,7 @@ namespace {
 
     id_cap_t id_cap = unwrap_sysret(sys_id_cap_create());
 
-    int result = attach_task(id_cap, task_cap, root_page_table_cap, heap_root, heap_root);
+    int result = attach_task(id_cap, task_cap, root_page_table_cap, stack_available, total_available, stack_commit);
 
     if (result == MM_CODE_S_OK) [[likely]] {
       id_cap_t copied_id_cap = unwrap_sysret(sys_id_cap_copy(id_cap));
@@ -65,17 +67,19 @@ namespace {
     msg_buf->data[0]          = detach_task(id_cap);
   }
 
-  void sbrk(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_SBRK);
+  void vmap(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VMAP);
 
-    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
+    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 4) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    id_cap_t id_cap    = msg_buf->data[0];
-    intptr_t increment = msg_buf->data[msg_buf->cap_part_length + 1];
+    id_cap_t  id_cap  = msg_buf->data[0];
+    int       level   = msg_buf->data[msg_buf->cap_part_length + 1];
+    int       flags   = msg_buf->data[msg_buf->cap_part_length + 2];
+    uintptr_t va_base = msg_buf->data[msg_buf->cap_part_length + 3];
 
     if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
       msg_buf->data_part_length               = 1;
@@ -83,9 +87,57 @@ namespace {
       return;
     }
 
+    virt_page_cap_t virt_page_cap;
+    uintptr_t       act_va_base;
+    int             result = vmap_task(id_cap, level, flags, va_base, &virt_page_cap, &act_va_base);
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      msg_buf->cap_part_length  = 0;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = result;
+      return;
+    }
+
+    msg_buf->cap_part_length  = 1;
+    msg_buf->data[0]          = virt_page_cap;
+    msg_buf->data_part_length = 2;
+    msg_buf->data[1]          = MM_CODE_S_OK;
+    msg_buf->data[2]          = act_va_base;
+  }
+
+  void vremap(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VREMAP);
+
+    if (msg_buf->cap_part_length != 3 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    id_cap_t        src_id_cap  = msg_buf->data[0];
+    id_cap_t        dst_id_cap  = msg_buf->data[1];
+    virt_page_cap_t page_cap    = msg_buf->data[2];
+    int             flags       = msg_buf->data[msg_buf->cap_part_length + 1];
+    uintptr_t       dst_va_base = msg_buf->data[msg_buf->cap_part_length + 2];
+
+    if (unwrap_sysret(sys_cap_type(src_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(dst_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(page_cap)) != CAP_VIRT_PAGE) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    uintptr_t act_va_base;
+    int       result = vremap_task(src_id_cap, dst_id_cap, flags, dst_va_base, page_cap, &act_va_base);
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      msg_buf->cap_part_length  = 0;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = result;
+      return;
+    }
+
     msg_buf->cap_part_length  = 0;
-    msg_buf->data_part_length = 1;
-    msg_buf->data[0]          = sbrk_task(id_cap, increment, &msg_buf->data[1]);
+    msg_buf->data_part_length = 2;
+    msg_buf->data[0]          = MM_CODE_S_OK;
+    msg_buf->data[1]          = act_va_base;
   }
 
   void fetch(message_buffer_t* msg_buf) {
@@ -102,32 +154,6 @@ namespace {
     uint32_t flags     = msg_buf->data[3];
 
     mem_cap_t mem_cap = fetch_mem_cap(size, alignment, flags);
-    if (mem_cap == 0) [[unlikely]] {
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
-      return;
-    }
-
-    msg_buf->cap_part_length  = 1;
-    msg_buf->data[0]          = mem_cap;
-    msg_buf->data_part_length = 1;
-    msg_buf->data[1]          = MM_CODE_S_OK;
-  }
-
-  void retrieve(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_RETRIEVE);
-
-    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 4) [[unlikely]] {
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    uintptr_t addr  = msg_buf->data[1];
-    size_t    size  = msg_buf->data[2];
-    int       flags = msg_buf->data[3];
-
-    mem_cap_t mem_cap = retrieve_mem_cap(addr, size, flags);
     if (mem_cap == 0) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
@@ -163,6 +189,20 @@ namespace {
     msg_buf->data[0]          = MM_CODE_S_OK;
   }
 
+  void info(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_INFO);
+
+    if (msg_buf->cap_part_length != 0) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    msg_buf->cap_part_length  = 0;
+    msg_buf->data_part_length = 1;
+    msg_buf->data[0]          = MM_CODE_S_OK;
+  }
+
   void proc_msg(message_buffer_t* msg_buf) {
     assert(msg_buf != NULL);
 
@@ -181,17 +221,20 @@ namespace {
       case MM_MSG_TYPE_DETACH:
         detach(msg_buf);
         break;
-      case MM_MSG_TYPE_SBRK:
-        sbrk(msg_buf);
+      case MM_MSG_TYPE_VMAP:
+        vmap(msg_buf);
+        break;
+      case MM_MSG_TYPE_VREMAP:
+        vremap(msg_buf);
         break;
       case MM_MSG_TYPE_FETCH:
         fetch(msg_buf);
         break;
-      case MM_MSG_TYPE_RETRIEVE:
-        retrieve(msg_buf);
-        break;
       case MM_MSG_TYPE_REVOKE:
         revoke(msg_buf);
+        break;
+      case MM_MSG_TYPE_INFO:
+        info(msg_buf);
         break;
       default:
         msg_buf->data_part_length               = 1;

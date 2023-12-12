@@ -79,13 +79,11 @@ __weak void __heap_free(void* ptr) {
 }
 
 __weak void* __heap_sbrk() {
-  uintptr_t new_brk_pos = mm_sbrk(__mm_ep_cap, __mm_id_cap, MEGA_PAGE_SIZE);
-  __if_unlikely (new_brk_pos == (uintptr_t)-1) {
+  uintptr_t new_pos = mm_vmap(__mm_id_cap, MEGA_PAGE, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, 0, NULL);
+  __if_unlikely (new_pos == 0) {
     return NULL;
   }
 
-  uintptr_t result = __brk_pos;
-  __brk_pos        = new_brk_pos;
-
-  return (void*)result;
+  __brk_pos = new_pos;
+  return (void*)new_pos;
 }

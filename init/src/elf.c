@@ -77,7 +77,7 @@ static page_table_cap_t map_page_table(root_boot_info_t* root_boot_info, task_ca
   return page_table_cap;
 }
 
-bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size, uintptr_t* heap_root) {
+bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size, bool alloc_stack, uintptr_t* heap_root) {
   if (!is_valid_elf_format(data, size)) {
     return false;
   }
@@ -156,32 +156,35 @@ bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_
 
   heap_start = (heap_start + MEGA_PAGE_SIZE - 1) / MEGA_PAGE_SIZE * MEGA_PAGE_SIZE;
 
-  const uintptr_t stack_va = unwrap_sysret(sys_system_user_space_end()) - KILO_PAGE_SIZE;
+  if (alloc_stack) {
+    const uintptr_t stack_va = unwrap_sysret(sys_system_user_space_end()) - KILO_PAGE_SIZE;
 
-  page_table_cap = map_page_table(root_boot_info, task, task_root_page_table_cap, KILO_PAGE_SIZE, stack_va);
-  if (page_table_cap == 0) {
-    return false;
+    page_table_cap = map_page_table(root_boot_info, task, task_root_page_table_cap, KILO_PAGE_SIZE, stack_va);
+    if (page_table_cap == 0) {
+      return false;
+    }
+
+    mem_cap_t stack_mem_cap = fetch_mem_cap(root_boot_info, false, true, true, false, KILO_PAGE_SIZE, KILO_PAGE_SIZE);
+    if (stack_mem_cap == 0) {
+      return false;
+    }
+
+    virt_page_cap_t stack_virt_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(stack_mem_cap, KILO_PAGE));
+    unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(stack_va, KILO_PAGE), true, true, false, stack_virt_cap));
+
+    unwrap_sysret(sys_task_cap_delegate_cap(task, stack_virt_cap));
+    unwrap_sysret(sys_task_cap_delegate_cap(task, page_table_cap));
+
+    unwrap_sysret(sys_task_cap_set_reg(task, REG_STACK_POINTER, stack_va + KILO_PAGE_SIZE));
   }
 
-  mem_cap_t stack_mem_cap = fetch_mem_cap(root_boot_info, false, true, true, false, KILO_PAGE_SIZE, KILO_PAGE_SIZE);
-  if (stack_mem_cap == 0) {
-    return false;
-  }
-
-  virt_page_cap_t stack_virt_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(stack_mem_cap, KILO_PAGE));
-  unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(stack_va, KILO_PAGE), true, true, false, stack_virt_cap));
-
-  unwrap_sysret(sys_task_cap_delegate_cap(task, stack_virt_cap));
-  unwrap_sysret(sys_task_cap_delegate_cap(task, page_table_cap));
-
-  unwrap_sysret(sys_task_cap_set_reg(task, REG_STACK_POINTER, stack_va + KILO_PAGE_SIZE));
   unwrap_sysret(sys_task_cap_set_reg(task, REG_PROGRAM_COUNTER, header->entry_position));
 
   task_cap_t copy_task = unwrap_sysret(sys_task_cap_copy(task));
   task_cap_t dst_task  = unwrap_sysret(sys_task_cap_transfer_cap(task, copy_task));
 
-  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_2, dst_task));
-  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_3, 0));
+  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_2, dst_task)); // __this_task_cap
+  unwrap_sysret(sys_task_cap_set_reg(task, REG_ARG_3, 0));        // __apm_task_cap
 
   if (heap_root) {
     *heap_root = heap_start;
