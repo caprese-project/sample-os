@@ -191,7 +191,7 @@ uintptr_t task_table::random_va(id_cap_t id, int level) {
     addr         = round_up(addr + get_page_size(vp_level), page_size);
   }
 
-  return 0;
+  return addr;
 }
 
 page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {

@@ -15,7 +15,10 @@ int main() {
   __mm_ep_cap = __init_context.__arg_regs[0];
   __mm_id_cap = __init_context.__arg_regs[1];
 
-  __heap_sbrk();
+  if (__heap_sbrk() == nullptr) [[unlikely]] {
+    abort();
+  }
+
   __brk_start = __brk_pos - MEGA_PAGE_SIZE;
   __heap_init();
 
