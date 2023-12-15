@@ -1,5 +1,6 @@
 #include <apm/task_manager.h>
 #include <crt/global.h>
+#include <crt/heap.h>
 #include <libcaprese/cap.h>
 #include <libcaprese/syscall.h>
 #include <sstream>
@@ -13,6 +14,10 @@ extern "C" {
 int main() {
   __mm_ep_cap = __init_context.__arg_regs[0];
   __mm_id_cap = __init_context.__arg_regs[1];
+
+  __heap_sbrk();
+  __brk_start = __brk_pos - MEGA_PAGE_SIZE;
+  __heap_init();
 
   std::istringstream stream(std::string(_plic_elf_start, _plic_elf_end - _plic_elf_start), std::istringstream::binary);
   if (!create_task("plic", std::ref<std::istream>(stream))) {

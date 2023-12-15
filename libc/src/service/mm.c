@@ -9,12 +9,10 @@ id_cap_t mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, si
   assert(unwrap_sysret(sys_cap_type(task_cap)) == CAP_TASK);
   assert(unwrap_sysret(sys_cap_type(root_page_table_cap)) == CAP_PAGE_TABLE);
 
-  task_cap_t copied_task_cap = unwrap_sysret(sys_task_cap_copy(task_cap));
-
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 2;
-  msg_buf.data[0]         = copied_task_cap;
+  msg_buf.data[0]         = unwrap_sysret(sys_task_cap_copy(task_cap));
   msg_buf.data[1]         = root_page_table_cap;
 
   msg_buf.data_part_length = 4;
@@ -66,13 +64,13 @@ bool mm_detach(id_cap_t id_cap) {
   return true;
 }
 
-uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base, virt_page_cap_t* dst) {
+uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base) {
   assert(unwrap_sysret(sys_cap_type(id_cap)) == CAP_ID);
 
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = id_cap;
+  msg_buf.data[0]         = unwrap_sysret(sys_id_cap_copy(id_cap));
 
   msg_buf.data_part_length = 4;
   msg_buf.data[1]          = MM_MSG_TYPE_VMAP;
@@ -90,31 +88,26 @@ uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base, virt
     return 0;
   }
 
-  assert(msg_buf.cap_part_length == 1);
+  assert(msg_buf.cap_part_length == 0);
   assert(msg_buf.data_part_length == 2);
-
-  __if_unlikely (dst != NULL) {
-    *dst = msg_buf.data[0];
-  }
 
   return msg_buf.data[msg_buf.cap_part_length + 1];
 }
 
-uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr_t dst_va_base, virt_page_cap_t page_cap) {
+uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr_t src_va_base, uintptr_t dst_va_base) {
   assert(unwrap_sysret(sys_cap_type(src_id_cap)) == CAP_ID);
   assert(unwrap_sysret(sys_cap_type(dst_id_cap)) == CAP_ID);
-  assert(unwrap_sysret(sys_cap_type(page_cap)) == CAP_VIRT_PAGE);
 
   message_buffer_t msg_buf = {};
 
-  msg_buf.cap_part_length = 3;
-  msg_buf.data[0]         = src_id_cap;
-  msg_buf.data[1]         = dst_id_cap;
-  msg_buf.data[2]         = page_cap;
+  msg_buf.cap_part_length = 2;
+  msg_buf.data[0]         = unwrap_sysret(sys_id_cap_copy(src_id_cap));
+  msg_buf.data[1]         = unwrap_sysret(sys_id_cap_copy(dst_id_cap));
 
-  msg_buf.data_part_length = 3;
-  msg_buf.data[3]          = MM_MSG_TYPE_VREMAP;
-  msg_buf.data[4]          = flags;
+  msg_buf.data_part_length = 4;
+  msg_buf.data[2]          = MM_MSG_TYPE_VREMAP;
+  msg_buf.data[3]          = flags;
+  msg_buf.data[4]          = src_va_base;
   msg_buf.data[5]          = dst_va_base;
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);

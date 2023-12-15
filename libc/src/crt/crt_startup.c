@@ -1,4 +1,5 @@
 #include <crt/global.h>
+#include <crt/heap.h>
 #include <internal/branch.h>
 #include <libcaprese/cap.h>
 #include <stdlib.h>

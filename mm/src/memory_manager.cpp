@@ -36,6 +36,9 @@ mem_cap_t fetch_mem_cap(size_t size, size_t alignment, int flags) {
   size_t mem_cap_size = 0;
 
   for (auto& [phys_addr, mem_info] : ram_mem_caps) {
+    assert(mem_info.phys_addr == unwrap_sysret(sys_mem_cap_phys_addr(mem_info.cap)));
+    assert(mem_info.size == ((size_t)1 << unwrap_sysret(sys_mem_cap_size_bit(mem_info.cap))));
+
     if (mem_info.size < size) {
       continue;
     }

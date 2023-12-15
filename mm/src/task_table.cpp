@@ -28,7 +28,7 @@ task_table::~task_table() {
   // TODO: Release resources.
 }
 
-int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit) {
+int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal) {
   assert(unwrap_sysret(sys_cap_type(id)) == CAP_ID);
   assert(unwrap_sysret(sys_cap_type(task)) == CAP_TASK);
   assert(unwrap_sysret(sys_cap_type(root_page_table)) == CAP_PAGE_TABLE);
@@ -65,7 +65,7 @@ int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_
 
   info.page_table_caps[max_page][0] = root_page_table;
 
-  if (id != __this_id_cap) {
+  if (!internal) {
     if (stack_commit > 0) {
       grow_stack(id, stack_commit);
     }
@@ -93,7 +93,7 @@ int task_table::detach(id_cap_t id) {
   return MM_CODE_S_OK;
 }
 
-int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, virt_page_cap_t* dst, uintptr_t* act_va_base) {
+int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, uintptr_t* act_va_base) {
   if (!table.contains(id)) [[unlikely]] {
     return MM_CODE_E_NOT_ATTACHED;
   }
@@ -106,6 +106,9 @@ int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, virt_
 
   if (va_base == 0) {
     va_base = random_va(id, level);
+    if (va_base == 0) [[unlikely]] {
+      return MM_CODE_E_OVERFLOW;
+    }
   }
 
   if (va_base % get_page_size(level)) [[unlikely]] {
@@ -116,7 +119,7 @@ int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, virt_
     return MM_CODE_E_ILL_ARGS;
   }
 
-  int result = map(id, level, flags, va_base, dst);
+  int result = map(id, level, flags, va_base);
   if (result != MM_CODE_S_OK) [[unlikely]] {
     return result;
   }
@@ -125,7 +128,7 @@ int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, virt_
   return result;
 }
 
-int task_table::vremap(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t dst_va_base, virt_page_cap_t page, uintptr_t* act_va_base) {
+int task_table::vremap(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t src_va_base, uintptr_t dst_va_base, uintptr_t* act_va_base) {
   if (!table.contains(src_id)) [[unlikely]] {
     return MM_CODE_E_NOT_ATTACHED;
   }
@@ -134,25 +137,27 @@ int task_table::vremap(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t ds
     return MM_CODE_E_NOT_ATTACHED;
   }
 
-  if (table[src_id].virt_page_caps.contains(page)) [[unlikely]] {
+  task_info& src_info = table.at(src_id);
+  task_info& dst_info = table.at(dst_id);
+
+  if (!src_info.virt_page_caps.contains(src_va_base)) [[unlikely]] {
     return MM_CODE_E_NOT_MAPPED;
   }
 
-  if (!unwrap_sysret(sys_virt_page_cap_mapped(page))) [[unlikely]] {
-    return MM_CODE_E_NOT_MAPPED;
-  }
-
-  int level = static_cast<int>(unwrap_sysret(sys_virt_page_cap_level(page)));
-
-  if (dst_va_base == 0) {
-    dst_va_base = random_va(dst_id, level);
-  }
-
-  if (table[dst_id].virt_page_caps.contains(dst_va_base)) [[unlikely]] {
+  if (dst_info.virt_page_caps.contains(dst_va_base)) [[unlikely]] {
     return MM_CODE_E_ALREADY_MAPPED;
   }
 
-  int result = remap(src_id, dst_id, level, flags, dst_va_base, page);
+  int level = static_cast<int>(unwrap_sysret(sys_virt_page_cap_level(src_info.virt_page_caps.at(src_va_base))));
+
+  if (dst_va_base == 0) {
+    dst_va_base = random_va(dst_id, level);
+    if (dst_va_base == 0) [[unlikely]] {
+      return MM_CODE_E_OVERFLOW;
+    }
+  }
+
+  int result = remap(src_id, dst_id, level, flags, src_va_base, dst_va_base);
   if (result != MM_CODE_S_OK) [[unlikely]] {
     return result;
   }
@@ -166,8 +171,23 @@ task_info& task_table::get_task_info(id_cap_t id) {
 }
 
 uintptr_t task_table::random_va(id_cap_t id, int level) {
+  // TODO: address randomization
+
   assert(table.contains(id));
   assert(level >= KILO_PAGE && level <= max_page);
+
+  task_info& info = table.at(id);
+
+  const size_t    page_size = get_page_size(level);
+  const uintptr_t end_addr  = user_space_end - page_size;
+
+  for (uintptr_t addr = round_up(get_page_size(MEGA_PAGE) * 10, page_size); addr < end_addr; addr += page_size) {
+    if (info.virt_page_caps.contains(addr)) {
+      continue;
+    }
+
+    return addr;
+  }
 
   return 0;
 }
@@ -180,34 +200,31 @@ page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {
 
   task_info& info = table[id];
 
-  page_table_cap_t page_table_cap = info.page_table_caps[max_page][0];
-
   for (int lv = max_page - 1; lv >= level; --lv) {
     uintptr_t base = get_page_table_base_addr(va_base, lv);
 
     if (!info.page_table_caps[lv].contains(base)) {
-      int index = get_page_table_index(base, level);
-
       mem_cap_t mem_cap = fetch_mem_cap(KILO_PAGE_SIZE, KILO_PAGE_SIZE, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
       if (mem_cap == 0) [[unlikely]] {
         return 0;
       }
 
-      page_table_cap_t next_page_table_cap = unwrap_sysret(sys_mem_cap_create_page_table_object(mem_cap));
-      if (sysret_failed(sys_page_table_cap_map_table(page_table_cap, index, next_page_table_cap))) [[unlikely]] {
+      int              parent_level         = lv + 1;
+      page_table_cap_t parent_page_table    = info.page_table_caps[lv + 1][get_page_table_base_addr(va_base, parent_level)];
+      int              parent_index         = get_page_table_index(va_base, parent_level);
+      page_table_cap_t child_page_table_cap = unwrap_sysret(sys_mem_cap_create_page_table_object(mem_cap));
+      if (sysret_failed(sys_page_table_cap_map_table(parent_page_table, parent_index, child_page_table_cap))) [[unlikely]] {
         return 0;
       }
 
-      info.page_table_caps[lv][base] = next_page_table_cap;
+      info.page_table_caps[lv][base] = child_page_table_cap;
     }
-
-    page_table_cap = info.page_table_caps[lv][base];
   }
 
-  return page_table_cap;
+  return info.page_table_caps[level][get_page_table_base_addr(va_base, level)];
 }
 
-int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base, virt_page_cap_t* dst) {
+int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base) {
   assert(table.contains(id));
   assert(va_base % get_page_size(level) == 0);
   assert(va_base > 0);
@@ -257,31 +274,22 @@ int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base, virt_p
 
   info.virt_page_caps[va_base] = virt_page_cap;
 
-  if (dst != nullptr) {
-    *dst = virt_page_cap;
-  }
-
   info.total_commit += get_page_size(level);
 
   return MM_CODE_S_OK;
 }
 
-int task_table::remap(id_cap_t src_id, id_cap_t dst_id, int level, int flags, uintptr_t dst_va_base, virt_page_cap_t page) {
+int task_table::remap(id_cap_t src_id, id_cap_t dst_id, int level, int flags, uintptr_t src_va_base, uintptr_t dst_va_base) {
   assert(table.contains(src_id));
   assert(table.contains(dst_id));
   assert(dst_va_base % get_page_size(level) == 0);
   assert(dst_va_base > 0);
   assert(dst_va_base <= user_space_end - get_page_size(level));
-  assert(unwrap_sysret(sys_virt_page_cap_mapped(page)));
-  assert(static_cast<int>(unwrap_sysret(sys_virt_page_cap_level(page))) == level);
 
-  task_info& src_info = table[src_id];
-  task_info& dst_info = table[dst_id];
-
-  uintptr_t src_va_base = unwrap_sysret(sys_virt_page_cap_virt_addr(page));
+  task_info& src_info = table.at(src_id);
+  task_info& dst_info = table.at(dst_id);
 
   assert(src_info.virt_page_caps.contains(src_va_base));
-  assert(unwrap_sysret(sys_virt_page_cap_phys_addr(src_info.virt_page_caps[src_va_base])) == unwrap_sysret(sys_virt_page_cap_phys_addr(page)));
 
   if (dst_info.total_available < dst_info.total_commit + get_page_size(level)) [[unlikely]] {
     return MM_CODE_E_OVERFLOW;
@@ -306,11 +314,12 @@ int task_table::remap(id_cap_t src_id, id_cap_t dst_id, int level, int flags, ui
   bool writable   = flags & MM_VMAP_FLAG_WRITE;
   bool executable = flags & MM_VMAP_FLAG_EXEC;
 
-  if (sysret_failed(sys_page_table_cap_remap_page(dst_page_table_cap, index, readable, writable, executable, page, src_page_table_cap))) [[unlikely]] {
+  virt_page_cap_t virt_page_cap = src_info.virt_page_caps.at(src_va_base);
+  if (sysret_failed(sys_page_table_cap_remap_page(dst_page_table_cap, index, readable, writable, executable, virt_page_cap, src_page_table_cap))) [[unlikely]] {
     return MM_CODE_E_FAILURE;
   }
 
-  dst_info.virt_page_caps[dst_va_base] = page;
+  dst_info.virt_page_caps[dst_va_base] = virt_page_cap;
   src_info.virt_page_caps.erase(src_va_base);
 
   dst_info.total_commit += get_page_size(level);
@@ -343,7 +352,7 @@ int task_table::grow_stack(id_cap_t id, size_t size) {
     for (int level = max_page; level >= KILO_PAGE; --level) {
       size_t page_size = get_page_size(level);
       if (sz >= page_size && start % page_size == 0) {
-        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start, nullptr);
+        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start);
         if (result != MM_CODE_S_OK) [[unlikely]] {
           return result;
         }
@@ -357,20 +366,20 @@ int task_table::grow_stack(id_cap_t id, size_t size) {
   return MM_CODE_S_OK;
 }
 
-int attach_task(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit) {
-  return table.attach(id, task, root_page_table, stack_available, total_available, stack_commit);
+int attach_task(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal) {
+  return table.attach(id, task, root_page_table, stack_available, total_available, stack_commit, internal);
 }
 
 int detach_task(id_cap_t id) {
   return table.detach(id);
 }
 
-int vmap_task(id_cap_t id, int level, int flags, uintptr_t va_base, virt_page_cap_t* dst, uintptr_t* act_va_base) {
-  return table.vmap(id, level, flags, va_base, dst, act_va_base);
+int vmap_task(id_cap_t id, int level, int flags, uintptr_t va_base, uintptr_t* act_va_base) {
+  return table.vmap(id, level, flags, va_base, act_va_base);
 }
 
-int vremap_task(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t dst_va_base, virt_page_cap_t page, uintptr_t* act_va_base) {
-  return table.vremap(src_id, dst_id, flags, dst_va_base, page, act_va_base);
+int vremap_task(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t src_va_base, uintptr_t dst_va_base, uintptr_t* act_va_base) {
+  return table.vremap(src_id, dst_id, flags, src_va_base, dst_va_base, act_va_base);
 }
 
 int grow_stack(id_cap_t id, size_t size) {

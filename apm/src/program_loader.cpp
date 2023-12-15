@@ -14,18 +14,17 @@ bool program_loader::map_page(uintptr_t va, int level, int flags, const void* da
   assert(va % get_page_size(level) == 0);
 
   if (data != nullptr) {
-    virt_page_cap_t page_cap;
-    uintptr_t       addr = mm_vmap(__mm_id_cap, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, 0, &page_cap);
+    uintptr_t addr = mm_vmap(__mm_id_cap, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, 0);
     if (addr == 0) [[unlikely]] {
       return false;
     }
     memcpy(reinterpret_cast<void*>(addr), data, get_page_size(level));
-    addr = mm_vremap(__mm_id_cap, target_ref.get().get_mm_id_cap().get(), flags, va, page_cap);
+    addr = mm_vremap(__mm_id_cap, target_ref.get().get_mm_id_cap().get(), flags, addr, va);
     if (addr == 0) [[unlikely]] {
       return false;
     }
   } else {
-    mm_vmap(target_ref.get().get_mm_id_cap().get(), level, flags, va, nullptr);
+    mm_vmap(target_ref.get().get_mm_id_cap().get(), level, flags, va);
   }
 
   return true;
