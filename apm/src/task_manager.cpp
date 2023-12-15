@@ -1,5 +1,6 @@
 #include <apm/elf_loader.h>
 #include <apm/task_manager.h>
+#include <crt/global.h>
 #include <libcaprese/syscall.h>
 #include <service/mm.h>
 #include <utility>
@@ -85,6 +86,14 @@ uint32_t task::get_tid() const noexcept {
   return tid;
 }
 
+void task::set_register(uintptr_t reg, uintptr_t value) noexcept {
+  sys_task_cap_set_reg(task_cap.get(), reg, value);
+}
+
+uintptr_t task::get_register(uintptr_t reg) const noexcept {
+  return unwrap_sysret(sys_task_cap_get_reg(task_cap.get(), reg));
+}
+
 bool task::load_program(std::reference_wrapper<std::istream> data) {
   if (!task_cap) [[unlikely]] {
     return false;
@@ -121,6 +130,14 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   if (!task.load_program(data)) {
     return false;
   }
+
+  task_cap_t copied_task_cap = unwrap_sysret(sys_task_cap_copy(task.get_task_cap().get()));
+  task_cap_t dst_task_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_task_cap));
+  task.set_register(REG_ARG_2, dst_task_cap);
+
+  task_cap_t copied_apm_cap = unwrap_sysret(sys_task_cap_copy(__this_task_cap));
+  task_cap_t dst_apm_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_apm_cap));
+  task.set_register(REG_ARG_3, dst_apm_cap);
 
   tasks.insert(std::pair(name, std::move(task)));
 

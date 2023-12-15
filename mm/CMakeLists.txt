@@ -14,7 +14,7 @@ target_compile_options(mm PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(mm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(mm PRIVATE libc)
+target_link_libraries(mm PRIVATE libc libcxx)
 
 target_link_options(
   mm

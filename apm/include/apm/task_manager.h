@@ -34,6 +34,9 @@ public:
   const std::string& get_name() const noexcept;
   uint32_t           get_tid() const noexcept;
 
+  void      set_register(uintptr_t reg, uintptr_t value) noexcept;
+  uintptr_t get_register(uintptr_t reg) const noexcept;
+
   bool load_program(std::reference_wrapper<std::istream> data);
 
   void kill() const;

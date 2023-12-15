@@ -149,9 +149,7 @@ bool elf_loader::load() {
 
   delete[] buf;
 
-  if (sysret_failed(sys_task_cap_set_reg(target_ref.get().get_task_cap().get(), REG_PROGRAM_COUNTER, header.e_entry))) {
-    return false;
-  }
+  target_ref.get().set_register(REG_PROGRAM_COUNTER, header.e_entry);
 
   return true;
 }

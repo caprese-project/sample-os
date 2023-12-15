@@ -17,7 +17,7 @@ target_compile_options(apm PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
 target_include_directories(apm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(apm PRIVATE libc)
+target_link_libraries(apm PRIVATE libc libcxx)
 
 add_custom_target(
   apm_linker
