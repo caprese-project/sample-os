@@ -181,12 +181,14 @@ uintptr_t task_table::random_va(id_cap_t id, int level) {
   const size_t    page_size = get_page_size(level);
   const uintptr_t end_addr  = user_space_end - page_size;
 
-  for (uintptr_t addr = round_up(get_page_size(MEGA_PAGE) * 10, page_size); addr < end_addr; addr += page_size) {
-    if (info.virt_page_caps.contains(addr)) {
-      continue;
+  uintptr_t addr = round_up(get_page_size(MEGA_PAGE) * 10, page_size);
+  while (addr < end_addr) {
+    if (!info.virt_page_caps.contains(addr)) {
+      break;
     }
 
-    return addr;
+    int vp_level = static_cast<int>(unwrap_sysret(sys_virt_page_cap_level(info.virt_page_caps.at(addr))));
+    addr         = round_up(addr + get_page_size(vp_level), page_size);
   }
 
   return 0;
