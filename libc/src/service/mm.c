@@ -12,8 +12,8 @@ id_cap_t mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, si
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 2;
-  msg_buf.data[0]         = unwrap_sysret(sys_task_cap_copy(task_cap));
-  msg_buf.data[1]         = root_page_table_cap;
+  msg_buf.data[0]         = msg_buf_transfer(unwrap_sysret(sys_task_cap_copy(task_cap)));
+  msg_buf.data[1]         = msg_buf_transfer(root_page_table_cap);
 
   msg_buf.data_part_length = 4;
   msg_buf.data[2]          = MM_MSG_TYPE_ATTACH;
@@ -43,7 +43,7 @@ bool mm_detach(id_cap_t id_cap) {
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = id_cap;
+  msg_buf.data[0]         = msg_buf_transfer(id_cap);
 
   msg_buf.data_part_length = 1;
   msg_buf.data[1]          = MM_MSG_TYPE_DETACH;
@@ -70,7 +70,7 @@ uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base) {
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = unwrap_sysret(sys_id_cap_copy(id_cap));
+  msg_buf.data[0]         = msg_buf_delegate(id_cap);
 
   msg_buf.data_part_length = 4;
   msg_buf.data[1]          = MM_MSG_TYPE_VMAP;
@@ -79,6 +79,8 @@ uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base) {
   msg_buf.data[4]          = va_base;
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
+
+  sys_cap_revoke(id_cap);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;
@@ -101,8 +103,8 @@ uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 2;
-  msg_buf.data[0]         = unwrap_sysret(sys_id_cap_copy(src_id_cap));
-  msg_buf.data[1]         = unwrap_sysret(sys_id_cap_copy(dst_id_cap));
+  msg_buf.data[0]         = msg_buf_delegate(src_id_cap);
+  msg_buf.data[1]         = msg_buf_delegate(dst_id_cap);
 
   msg_buf.data_part_length = 4;
   msg_buf.data[2]          = MM_MSG_TYPE_VREMAP;
@@ -111,6 +113,9 @@ uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr
   msg_buf.data[5]          = dst_va_base;
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
+
+  sys_cap_revoke(src_id_cap);
+  sys_cap_revoke(dst_id_cap);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;
@@ -126,16 +131,15 @@ uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr
   return msg_buf.data[msg_buf.cap_part_length + 1];
 }
 
-mem_cap_t mm_fetch(size_t size, size_t alignment, int flags) {
+mem_cap_t mm_fetch(size_t size, size_t alignment) {
   message_buffer_t msg_buf = {};
 
   msg_buf.cap_part_length = 0;
 
-  msg_buf.data_part_length = 4;
+  msg_buf.data_part_length = 3;
   msg_buf.data[0]          = MM_MSG_TYPE_FETCH;
   msg_buf.data[1]          = size;
   msg_buf.data[2]          = alignment;
-  msg_buf.data[3]          = flags;
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
 
@@ -185,7 +189,7 @@ task_cap_t mm_fetch_and_create_task_object(
   size_t size      = unwrap_sysret(sys_system_cap_size(CAP_TASK));
   size_t alignment = unwrap_sysret(sys_system_cap_align(CAP_TASK));
 
-  mem_cap_t mem_cap = mm_fetch(size, alignment, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(size, alignment);
   __if_unlikely (mem_cap == 0) {
     return 0;
   }
@@ -203,7 +207,7 @@ endpoint_cap_t mm_fetch_and_create_endpoint_object() {
   size_t size      = unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT));
   size_t alignment = unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT));
 
-  mem_cap_t mem_cap = mm_fetch(size, alignment, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(size, alignment);
   __if_unlikely (mem_cap == 0) {
     return 0;
   }
@@ -221,7 +225,7 @@ page_table_cap_t mm_fetch_and_create_page_table_object() {
   size_t size      = unwrap_sysret(sys_system_cap_size(CAP_PAGE_TABLE));
   size_t alignment = unwrap_sysret(sys_system_cap_align(CAP_PAGE_TABLE));
 
-  mem_cap_t mem_cap = mm_fetch(size, alignment, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(size, alignment);
   __if_unlikely (mem_cap == 0) {
     return 0;
   }
@@ -235,16 +239,16 @@ page_table_cap_t mm_fetch_and_create_page_table_object() {
   return unwrap_sysret(sysret);
 }
 
-virt_page_cap_t mm_fetch_and_create_virt_page_object(uintptr_t level) {
+virt_page_cap_t mm_fetch_and_create_virt_page_object(bool readable, bool writable, bool executable, uintptr_t level) {
   size_t size      = unwrap_sysret(sys_system_cap_size(CAP_VIRT_PAGE));
   size_t alignment = unwrap_sysret(sys_system_cap_align(CAP_VIRT_PAGE));
 
-  mem_cap_t mem_cap = mm_fetch(size, alignment, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(size, alignment);
   __if_unlikely (mem_cap == 0) {
     return 0;
   }
 
-  sysret_t sysret = sys_mem_cap_create_virt_page_object(mem_cap, level);
+  sysret_t sysret = sys_mem_cap_create_virt_page_object(mem_cap, readable, writable, executable, level);
   __if_unlikely (sysret_failed(sysret)) {
     mm_revoke(mem_cap);
     return 0;
@@ -257,7 +261,7 @@ cap_space_cap_t mm_fetch_and_create_cap_space_object() {
   size_t size      = unwrap_sysret(sys_system_cap_size(CAP_CAP_SPACE));
   size_t alignment = unwrap_sysret(sys_system_cap_align(CAP_CAP_SPACE));
 
-  mem_cap_t mem_cap = mm_fetch(size, alignment, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = mm_fetch(size, alignment);
   __if_unlikely (mem_cap == 0) {
     return 0;
   }

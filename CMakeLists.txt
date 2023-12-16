@@ -31,6 +31,9 @@ set(
 set(GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GENERATE_DIR})
 
+set(TMP_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
+file(MAKE_DIRECTORY ${TMP_DIR})
+
 include(FetchContent)
 
 set(LIBCAPRESE_COMPILE_OPTIONS ${CONFIG_COMPILE_OPTIONS})
@@ -46,7 +49,7 @@ set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(init)
 add_subdirectory(mm)
 add_subdirectory(apm)
-add_subdirectory(dev)
+add_subdirectory(dm)
 add_subdirectory(fs)
 
 add_subdirectory(libc)

@@ -1,1 +1,1 @@
-.section .plic_elf, "a", @progbits
+.section .dm_elf, "a", @progbits

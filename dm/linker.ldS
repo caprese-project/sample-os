@@ -1,11 +1,11 @@
-#include <dm_elf_size.h>
+#include <ramfs_size.h>
 
 OUTPUT_ARCH( "riscv" )
 ENTRY( _start )
 
 SECTIONS
 {
-  . = 0x40000000;
+  . = 0x20000000;
 
   .text :
   {
@@ -52,11 +52,11 @@ SECTIONS
 
   . = ALIGN(16);
 
-  .dm_elf :
+  .ramfs :
   {
-    _dm_elf_start = .;
-    KEEP(*(.dm_elf))
-    . += CONFIG_DM_ELF_SIZE;
-    _dm_elf_end = .;
+    _ramfs_start = .;
+    KEEP(*(.ramfs))
+    . += CONFIG_RAMFS_SIZE;
+    _ramfs_end = .;
   }
 }

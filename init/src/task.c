@@ -20,13 +20,13 @@ bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap) {
     return false;
   }
 
-  mem_cap_t cap_space_mem_cap = fetch_mem_cap(cap_space_size, cap_space_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t cap_space_mem_cap = fetch_mem_cap(cap_space_size, cap_space_align);
   if (cap_space_mem_cap == 0) {
     return false;
   }
   ctx->cap_space_cap = unwrap_sysret(sys_mem_cap_create_cap_space_object(cap_space_mem_cap));
 
-  mem_cap_t root_page_table_mem_cap = fetch_mem_cap(page_table_size, page_table_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t root_page_table_mem_cap = fetch_mem_cap(page_table_size, page_table_align);
   if (root_page_table_mem_cap == 0) {
     return false;
   }
@@ -34,7 +34,7 @@ bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap) {
 
   mem_cap_t cap_space_page_table_mem_caps[TERA_PAGE];
   for (int level = 0; level < max_page; ++level) {
-    cap_space_page_table_mem_caps[level] = fetch_mem_cap(page_table_size, page_table_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+    cap_space_page_table_mem_caps[level] = fetch_mem_cap(page_table_size, page_table_align);
     if (cap_space_page_table_mem_caps[level] == 0) {
       return false;
     }
@@ -44,7 +44,7 @@ bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap) {
     ctx->cap_space_page_table_caps[level] = 0;
   }
 
-  mem_cap_t task_mem_cap = fetch_mem_cap(task_size, task_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t task_mem_cap = fetch_mem_cap(task_size, task_align);
   if (task_mem_cap == 0) {
     return false;
   }
@@ -147,13 +147,13 @@ bool load_elf(task_context_t* ctx, const void* elf_data, size_t elf_size, vmappe
 
     int flags = 0;
     if (readable) {
-      flags |= MM_FETCH_FLAG_READ;
+      flags |= MM_VMAP_FLAG_READ;
     }
     if (writable) {
-      flags |= MM_FETCH_FLAG_WRITE;
+      flags |= MM_VMAP_FLAG_WRITE;
     }
     if (executable) {
-      flags |= MM_FETCH_FLAG_EXEC;
+      flags |= MM_VMAP_FLAG_EXEC;
     }
 
     for (uintptr_t va = va_start; va < va_end; va += KILO_PAGE_SIZE) {
@@ -196,7 +196,7 @@ bool load_elf(task_context_t* ctx, const void* elf_data, size_t elf_size, vmappe
 
 bool alloc_stack(task_context_t* ctx, vmapper_t vmap) {
   const uintptr_t stack_va = unwrap_sysret(sys_system_user_space_end()) - KILO_PAGE_SIZE;
-  vmap(ctx, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE, stack_va, NULL);
+  vmap(ctx, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, stack_va, NULL);
   unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_STACK_POINTER, stack_va + KILO_PAGE_SIZE));
   return true;
 }

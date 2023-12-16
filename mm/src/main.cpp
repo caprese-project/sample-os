@@ -68,19 +68,8 @@ namespace {
         continue;
       }
 
-      bool mem_readable = unwrap_sysret(sys_mem_cap_readable(cap));
-      if (!mem_readable) {
-        continue;
-      }
-
-      bool mem_writable = unwrap_sysret(sys_mem_cap_writable(cap));
-      if (!mem_writable) {
-        continue;
-      }
-
       uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(cap));
-      uintptr_t size_bit  = unwrap_sysret(sys_mem_cap_size_bit(cap));
-      uintptr_t mem_size  = 1 << size_bit;
+      uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(cap));
       uintptr_t end       = phys_addr + mem_size;
       uintptr_t used_size = unwrap_sysret(sys_mem_cap_used_size(cap));
       uintptr_t base_addr = (phys_addr + used_size + alignment - 1) / alignment * alignment;
@@ -108,7 +97,7 @@ namespace {
       return false;
     }
 
-    virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(page_mem_cap, MEGA_PAGE));
+    virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(page_mem_cap, true, true, false, MEGA_PAGE));
     if (sysret_failed(sys_page_table_cap_map_page(page_table_caps[MEGA_PAGE], get_page_table_index(__brk_pos, MEGA_PAGE), true, true, false, virt_page_cap))) {
       return false;
     }
@@ -219,7 +208,7 @@ int main() {
 
   const size_t ep_size    = unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT));
   const size_t ep_align   = unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT));
-  mem_cap_t    ep_mem_cap = fetch_mem_cap(ep_size, ep_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t    ep_mem_cap = fetch_mem_cap(ep_size, ep_align);
   if (ep_mem_cap == 0) {
     return 1;
   }
@@ -228,8 +217,8 @@ int main() {
 
   msg_buf.cap_part_length  = 2;
   msg_buf.data_part_length = 0;
-  msg_buf.data[0]          = ep_cap_copy;
-  msg_buf.data[1]          = init_id_cap_copy;
+  msg_buf.data[0]          = msg_buf_transfer(ep_cap_copy);
+  msg_buf.data[1]          = msg_buf_transfer(init_id_cap_copy);
   unwrap_sysret(sys_endpoint_cap_reply(init_task_ep_cap, &msg_buf));
 
   run(ep_cap);

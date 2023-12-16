@@ -17,8 +17,7 @@ static id_cap_t apm_mm_id_cap;
 static mem_cap_t extract_dtb_mem_cap(root_boot_info_t* root_boot_info) {
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
     uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->mem_caps[i]));
-    uintptr_t size_bit  = unwrap_sysret(sys_mem_cap_size_bit(root_boot_info->mem_caps[i]));
-    uintptr_t mem_size  = 1 << size_bit;
+    uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(root_boot_info->mem_caps[i]));
     uintptr_t end       = phys_addr + mem_size;
 
     if (phys_addr <= root_boot_info->arch_info.dtb_start && root_boot_info->arch_info.dtb_start < end) {
@@ -33,7 +32,7 @@ static mem_cap_t extract_dtb_mem_cap(root_boot_info_t* root_boot_info) {
   return 0;
 }
 
-static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment, int flags) {
+static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment) {
   root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
 
   size_t index        = 0;
@@ -45,30 +44,8 @@ static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment, int flags) {
       continue;
     }
 
-    if (flags & MM_FETCH_FLAG_READ) {
-      bool readable = unwrap_sysret(sys_mem_cap_readable(root_boot_info->mem_caps[i]));
-      if (!readable) {
-        continue;
-      }
-    }
-
-    if (flags & MM_FETCH_FLAG_WRITE) {
-      bool writable = unwrap_sysret(sys_mem_cap_writable(root_boot_info->mem_caps[i]));
-      if (!writable) {
-        continue;
-      }
-    }
-
-    if (flags & MM_FETCH_FLAG_EXEC) {
-      bool executable = unwrap_sysret(sys_mem_cap_executable(root_boot_info->mem_caps[i]));
-      if (!executable) {
-        continue;
-      }
-    }
-
     uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->mem_caps[i]));
-    uintptr_t size_bit  = unwrap_sysret(sys_mem_cap_size_bit(root_boot_info->mem_caps[i]));
-    uintptr_t mem_size  = 1 << size_bit;
+    uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(root_boot_info->mem_caps[i]));
     uintptr_t end       = phys_addr + mem_size;
 
     if (phys_addr <= root_boot_info->arch_info.dtb_start && root_boot_info->arch_info.dtb_start < end) {
@@ -132,7 +109,7 @@ static void early_vmap(task_context_t* ctx, int flags, uintptr_t va, const void*
     }
 
     if (ctx->page_table_caps[level][i] == 0) {
-      mem_cap_t mem_cap = early_fetch_mem_cap(page_table_size, page_table_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+      mem_cap_t mem_cap = early_fetch_mem_cap(page_table_size, page_table_align);
       if (mem_cap == 0) {
         abort();
       }
@@ -146,16 +123,16 @@ static void early_vmap(task_context_t* ctx, int flags, uintptr_t va, const void*
     page_table_cap = ctx->page_table_caps[level][i];
   }
 
-  mem_cap_t mem_cap = early_fetch_mem_cap(KILO_PAGE_SIZE, KILO_PAGE_SIZE, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t mem_cap = early_fetch_mem_cap(KILO_PAGE_SIZE, KILO_PAGE_SIZE);
   if (mem_cap == 0) {
     abort();
   }
 
-  virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, KILO_PAGE));
+  bool readable   = flags & MM_VMAP_FLAG_READ;
+  bool writable   = flags & MM_VMAP_FLAG_WRITE;
+  bool executable = flags & MM_VMAP_FLAG_EXEC;
 
-  bool readable   = flags & MM_FETCH_FLAG_READ;
-  bool writable   = flags & MM_FETCH_FLAG_WRITE;
-  bool executable = flags & MM_FETCH_FLAG_EXEC;
+  virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, readable, writable, executable, KILO_PAGE));
 
   if (data == NULL) {
     unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(va, KILO_PAGE), readable, writable, executable, virt_page_cap));
@@ -212,7 +189,7 @@ int main() {
     abort();
   }
 
-  mem_cap_t ep_mem_cap = early_fetch_mem_cap(unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT)), unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT)), MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+  mem_cap_t ep_mem_cap = early_fetch_mem_cap(unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT)), unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT)));
   if (ep_mem_cap == 0) {
     abort();
   }
@@ -229,10 +206,10 @@ int main() {
 
   message_buffer_t msg_buf;
   msg_buf.cap_part_length = 2 + max_page;
-  msg_buf.data[0]         = unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap));
-  msg_buf.data[1]         = root_boot_info->root_page_table_cap;
+  msg_buf.data[0]         = msg_buf_transfer(unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap)));
+  msg_buf.data[1]         = msg_buf_transfer(root_boot_info->root_page_table_cap);
   for (int i = 0; i < max_page; ++i) {
-    msg_buf.data[2 + i] = root_boot_info->page_table_caps[i];
+    msg_buf.data[2 + i] = msg_buf_transfer(root_boot_info->page_table_caps[i]);
   }
   msg_buf.cap_part_length += root_boot_info->num_mem_caps - 1;
   size_t dtb_cap_pos;
@@ -240,7 +217,7 @@ int main() {
     if (root_boot_info->mem_caps[dtb_cap_pos] == dtb_mem_cap) {
       break;
     }
-    msg_buf.data[2 + max_page + dtb_cap_pos] = root_boot_info->mem_caps[dtb_cap_pos];
+    msg_buf.data[2 + max_page + dtb_cap_pos] = msg_buf_transfer(root_boot_info->mem_caps[dtb_cap_pos]);
   }
   for (size_t i = dtb_cap_pos + 1; i < root_boot_info->num_mem_caps; ++i) {
     msg_buf.data[2 + max_page + i - 1] = root_boot_info->mem_caps[i];

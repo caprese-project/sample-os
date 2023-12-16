@@ -206,7 +206,7 @@ page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {
     uintptr_t base = get_page_table_base_addr(va_base, lv);
 
     if (!info.page_table_caps[lv].contains(base)) {
-      mem_cap_t mem_cap = fetch_mem_cap(KILO_PAGE_SIZE, KILO_PAGE_SIZE, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+      mem_cap_t mem_cap = fetch_mem_cap(KILO_PAGE_SIZE, KILO_PAGE_SIZE);
       if (mem_cap == 0) [[unlikely]] {
         return 0;
       }
@@ -251,25 +251,14 @@ int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base) {
   bool writable   = flags & MM_VMAP_FLAG_WRITE;
   bool executable = flags & MM_VMAP_FLAG_EXEC;
 
-  int fetch_flags = 0;
-  if (readable) {
-    fetch_flags |= MM_FETCH_FLAG_READ;
-  }
-  if (writable) {
-    fetch_flags |= MM_FETCH_FLAG_WRITE;
-  }
-  if (executable) {
-    fetch_flags |= MM_FETCH_FLAG_EXEC;
-  }
-
-  mem_cap_t mem_cap = fetch_mem_cap(get_page_size(level), get_page_size(level), fetch_flags);
+  mem_cap_t mem_cap = fetch_mem_cap(get_page_size(level), get_page_size(level));
   if (mem_cap == 0) [[unlikely]] {
     return MM_CODE_E_FAILURE;
   }
 
   int index = get_page_table_index(va_base, level);
 
-  virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, level));
+  virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, readable, writable, executable, level));
   if (sysret_failed(sys_page_table_cap_map_page(page_table_cap, index, readable, writable, executable, virt_page_cap))) {
     return MM_CODE_E_FAILURE;
   }

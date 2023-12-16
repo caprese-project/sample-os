@@ -1,8 +1,6 @@
 #ifndef INIT_ELF_H_
 #define INIT_ELF_H_
 
-#include <libcaprese/cap.h>
-#include <libcaprese/root_boot_info.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -86,7 +84,5 @@ typedef struct {
   elf_word_t address_alignment;
   elf_word_t entry_size;
 } elf_section_header_t;
-
-bool elf_load(root_boot_info_t* root_boot_info, task_cap_t task, page_table_cap_t task_root_page_table_cap, const void* data, size_t size, bool alloc_stack, uintptr_t* heap_root);
 
 #endif // INIT_ELF_H_

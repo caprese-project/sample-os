@@ -1,0 +1,1 @@
+.section .ramfs, "a", @progbits

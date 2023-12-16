@@ -6,9 +6,7 @@ set(CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS 0xa0000000)
 
 target_sources(
   init PRIVATE
-  src/elf.c
   src/main.c
-  src/mem.c
   src/section.s
   src/task.c
 )

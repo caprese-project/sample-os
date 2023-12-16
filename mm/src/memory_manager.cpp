@@ -19,8 +19,7 @@ void register_mem_cap(mem_cap_t mem_cap) {
 
   bool      device    = unwrap_sysret(sys_mem_cap_device(mem_cap));
   uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(mem_cap));
-  size_t    size_bit  = unwrap_sysret(sys_mem_cap_size_bit(mem_cap));
-  size_t    size      = (size_t)1 << size_bit;
+  size_t    size      = unwrap_sysret(sys_mem_cap_size(mem_cap));
 
   if (device) {
     assert(!dev_mem_caps.contains(phys_addr));
@@ -31,31 +30,15 @@ void register_mem_cap(mem_cap_t mem_cap) {
   }
 }
 
-mem_cap_t fetch_mem_cap(size_t size, size_t alignment, int flags) {
+mem_cap_t fetch_mem_cap(size_t size, size_t alignment) {
   cap_t  mem_cap      = 0;
   size_t mem_cap_size = 0;
 
   for (auto& [phys_addr, mem_info] : ram_mem_caps) {
     assert(mem_info.phys_addr == unwrap_sysret(sys_mem_cap_phys_addr(mem_info.cap)));
-    assert(mem_info.size == ((size_t)1 << unwrap_sysret(sys_mem_cap_size_bit(mem_info.cap))));
+    assert(mem_info.size == unwrap_sysret(sys_mem_cap_size(mem_info.cap)));
 
     if (mem_info.size < size) {
-      continue;
-    }
-
-    bool readable   = unwrap_sysret(sys_mem_cap_readable(mem_info.cap));
-    bool writable   = unwrap_sysret(sys_mem_cap_writable(mem_info.cap));
-    bool executable = unwrap_sysret(sys_mem_cap_executable(mem_info.cap));
-
-    if ((flags & MM_FETCH_FLAG_READ) && !readable) {
-      continue;
-    }
-
-    if ((flags & MM_FETCH_FLAG_WRITE) && !writable) {
-      continue;
-    }
-
-    if ((flags & MM_FETCH_FLAG_EXEC) && !executable) {
       continue;
     }
 
@@ -77,7 +60,7 @@ mem_cap_t fetch_mem_cap(size_t size, size_t alignment, int flags) {
     }
   }
 
-  sysret_t sysret = sys_mem_cap_create_memory_object(mem_cap, flags & MM_FETCH_FLAG_READ, flags & MM_FETCH_FLAG_WRITE, flags & MM_FETCH_FLAG_EXEC, size, alignment);
+  sysret_t sysret = sys_mem_cap_create_memory_object(mem_cap, size, alignment);
   if (sysret_failed(sysret)) {
     return 0;
   }

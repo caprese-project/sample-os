@@ -16,7 +16,7 @@ typedef struct {
   uintptr_t        heap_root;
 } task_context_t;
 
-typedef mem_cap_t (*mem_cap_fetcher_t)(size_t size, size_t alignment, int flags);
+typedef mem_cap_t (*mem_cap_fetcher_t)(size_t size, size_t alignment);
 typedef void (*vmapper_t)(task_context_t* ctx, int flags, uintptr_t va, const void* data);
 
 bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap);

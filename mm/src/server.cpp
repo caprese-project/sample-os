@@ -37,9 +37,11 @@ namespace {
 
       msg_buf->cap_part_length  = 1;
       msg_buf->data_part_length = 1;
-      msg_buf->data[0]          = copied_id_cap;
+      msg_buf->data[0]          = msg_buf_transfer(copied_id_cap);
       msg_buf->data[1]          = MM_CODE_S_OK;
     } else {
+      sys_cap_destroy(id_cap);
+
       msg_buf->cap_part_length  = 0;
       msg_buf->data_part_length = 1;
       msg_buf->data[0]          = result;
@@ -66,6 +68,8 @@ namespace {
     msg_buf->cap_part_length  = 0;
     msg_buf->data_part_length = 1;
     msg_buf->data[0]          = detach_task(id_cap);
+
+    sys_cap_destroy(id_cap);
   }
 
   void vmap(message_buffer_t* msg_buf) {
@@ -90,6 +94,9 @@ namespace {
 
     uintptr_t act_va_base;
     int       result = vmap_task(id_cap, level, flags, va_base, &act_va_base);
+
+    sys_cap_destroy(id_cap);
+
     if (result != MM_CODE_S_OK) [[unlikely]] {
       msg_buf->cap_part_length  = 0;
       msg_buf->data_part_length = 1;
@@ -126,6 +133,9 @@ namespace {
 
     uintptr_t act_va_base;
     int       result = vremap_task(src_id_cap, dst_id_cap, flags, src_va_base, dst_va_base, &act_va_base);
+
+    sys_cap_destroy(src_id_cap);
+
     if (result != MM_CODE_S_OK) [[unlikely]] {
       msg_buf->cap_part_length  = 0;
       msg_buf->data_part_length = 1;
@@ -142,17 +152,16 @@ namespace {
   void fetch(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_FETCH);
 
-    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 4) [[unlikely]] {
+    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
     }
 
-    size_t   size      = msg_buf->data[1];
-    size_t   alignment = msg_buf->data[2];
-    uint32_t flags     = msg_buf->data[3];
+    size_t size      = msg_buf->data[1];
+    size_t alignment = msg_buf->data[2];
 
-    mem_cap_t mem_cap = fetch_mem_cap(size, alignment, flags);
+    mem_cap_t mem_cap = fetch_mem_cap(size, alignment);
     if (mem_cap == 0) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
@@ -160,7 +169,7 @@ namespace {
     }
 
     msg_buf->cap_part_length  = 1;
-    msg_buf->data[0]          = mem_cap;
+    msg_buf->data[0]          = msg_buf_transfer(mem_cap);
     msg_buf->data_part_length = 1;
     msg_buf->data[1]          = MM_CODE_S_OK;
   }
@@ -253,7 +262,7 @@ namespace {
   sysret.error = SYS_E_UNKNOWN;
   while (true) {
     if (unwrap_sysret(sys_task_cap_get_free_slot_count(__this_task_cap)) < 0x10) [[unlikely]] {
-      mem_cap_t mem_cap = fetch_mem_cap(cap_space_size, cap_space_align, MM_FETCH_FLAG_READ | MM_FETCH_FLAG_WRITE);
+      mem_cap_t mem_cap = fetch_mem_cap(cap_space_size, cap_space_align);
       if (mem_cap == 0) [[unlikely]] {
         abort();
       }

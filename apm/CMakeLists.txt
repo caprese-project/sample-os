@@ -25,7 +25,7 @@ add_custom_target(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ldS
   BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
 )
-add_dependencies(apm_linker plic_size)
+add_dependencies(apm_linker dm_size)
 add_dependencies(apm apm_linker)
 
 target_link_options(
@@ -38,7 +38,7 @@ target_link_options(
 
 add_custom_target(
   apm_elf
-  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded --update-section .plic_elf=$<TARGET_FILE_DIR:plic>/plic.elf $<TARGET_FILE:apm> $<TARGET_FILE_DIR:apm>/apm.elf
+  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded --update-section .dm_elf=$<TARGET_FILE_DIR:dm>/dm.elf $<TARGET_FILE:apm> $<TARGET_FILE_DIR:apm>/apm.elf
 )
 add_dependencies(apm_elf apm)
 

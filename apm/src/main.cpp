@@ -7,8 +7,8 @@
 #include <stdlib.h>
 
 extern "C" {
-  extern const char _plic_elf_start[];
-  extern const char _plic_elf_end[];
+  extern const char _dm_elf_start[];
+  extern const char _dm_elf_end[];
 }
 
 int main() {
@@ -22,14 +22,14 @@ int main() {
   __brk_start = __brk_pos - MEGA_PAGE_SIZE;
   __heap_init();
 
-  std::istringstream stream(std::string(_plic_elf_start, _plic_elf_end - _plic_elf_start), std::istringstream::binary);
-  if (!create_task("plic", std::ref<std::istream>(stream))) {
+  std::istringstream stream(std::string(_dm_elf_start, _dm_elf_end - _dm_elf_start), std::istringstream::binary);
+  if (!create_task("dm", std::ref<std::istream>(stream))) {
     abort();
   }
 
-  const task& plic = lookup_task("plic");
-  plic.resume();
-  plic.switch_task();
+  const task& dm = lookup_task("dm");
+  dm.resume();
+  dm.switch_task();
 
   while (true) {
     sys_system_yield();

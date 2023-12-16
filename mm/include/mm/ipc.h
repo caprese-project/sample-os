@@ -23,8 +23,4 @@
 #define MM_VMAP_FLAG_EXEC  (1 << 2)
 #define MM_VMAP_FLAG_VPCAP (1 << 3)
 
-#define MM_FETCH_FLAG_READ  (1 << 0)
-#define MM_FETCH_FLAG_WRITE (1 << 1)
-#define MM_FETCH_FLAG_EXEC  (1 << 2)
-
 #endif // MM_IPC_H_
