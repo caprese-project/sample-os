@@ -115,46 +115,46 @@ bool elf_loader::load() {
       flags |= MM_VMAP_FLAG_EXEC;
     }
 
-    uintptr_t va_start  = round_down(prog_header.p_vaddr, KILO_PAGE_SIZE);
-    uintptr_t va_end    = round_up(prog_header.p_vaddr + prog_header.p_memsz, KILO_PAGE_SIZE);
-    size_t    va_offset = prog_header.p_vaddr % KILO_PAGE_SIZE;
+    uintptr_t va_base = round_down(prog_header.p_vaddr, KILO_PAGE_SIZE);
+    uintptr_t offset  = prog_header.p_vaddr % KILO_PAGE_SIZE;
+    size_t    written = 0;
 
     std::streampos pos = stream.tellg();
     stream.seekg(prog_header.p_offset);
 
-    uintptr_t va = va_start;
+    if (offset != 0) {
+      size_t len = std::min<size_t>(KILO_PAGE_SIZE - offset, prog_header.p_filesz);
 
-    if (va_offset > 0) {
-      memset(buf.get(), 0, KILO_PAGE_SIZE);
-      stream.read(buf.get() + va_offset, KILO_PAGE_SIZE - va_offset);
+      memset(buf.get(), 0, offset);
+      stream.read(buf.get() + offset, len);
+      memset(buf.get() + offset + len, 0, KILO_PAGE_SIZE - (offset + len));
 
-      if (!map_page(va_start, KILO_PAGE, flags, buf.get())) {
+      if (!map_page(va_base, KILO_PAGE, flags, buf.get())) {
         return false;
       }
 
-      va += KILO_PAGE_SIZE;
+      written += KILO_PAGE_SIZE - offset;
     }
 
-    for (; va < va_end; va += KILO_PAGE_SIZE) {
-      char* data = nullptr;
+    while (written < prog_header.p_filesz) {
+      size_t len = std::min<size_t>(KILO_PAGE_SIZE, prog_header.p_filesz - written);
 
-      size_t offset = va - va_start;
+      stream.read(buf.get(), len);
+      memset(buf.get() + len, 0, KILO_PAGE_SIZE - len);
 
-      if (offset < prog_header.p_filesz + va_offset) {
-        size_t size = KILO_PAGE_SIZE;
-        if (offset + size > prog_header.p_filesz + va_offset) {
-          size = prog_header.p_filesz + va_offset - offset;
-        }
-
-        memset(buf.get(), 0, KILO_PAGE_SIZE);
-        stream.read(buf.get(), size);
-
-        data = buf.get();
-      }
-
-      if (!map_page(va, KILO_PAGE, flags, data)) {
+      if (!map_page(va_base + offset + written, KILO_PAGE, flags, buf.get())) {
         return false;
       }
+
+      written += KILO_PAGE_SIZE;
+    }
+
+    while (written < prog_header.p_memsz) {
+      if (!map_page(va_base + offset + written, KILO_PAGE, flags, nullptr)) {
+        return false;
+      }
+
+      written += KILO_PAGE_SIZE;
     }
 
     stream.seekg(pos);
