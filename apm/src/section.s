@@ -1,1 +1,1 @@
-.section .dm_elf, "a", @progbits
+.section .ramfs, "a", @progbits

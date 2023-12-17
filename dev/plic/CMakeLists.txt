@@ -20,17 +20,3 @@ target_link_options(
   -nostdlib
   -z max-page-size=4096
 )
-
-add_custom_target(
-  plic_elf
-  COMMAND ${CMAKE_OBJCOPY} --strip-unneeded $<TARGET_FILE:plic> $<TARGET_FILE_DIR:plic>/plic.elf
-)
-add_dependencies(plic_elf plic)
-
-add_custom_target(
-  plic_size
-  COMMAND sh "-c" "ls -l $<TARGET_FILE_DIR:plic>/plic.elf | awk '{print \"#define CONFIG_PLIC_ELF_SIZE \"$5}' > ${GENERATE_DIR}/plic_elf_size.h"
-  BYPRODUCTS ${GENERATE_DIR}/plic_elf_size.h
-  VERBATIM
-)
-add_dependencies(plic_size plic_elf)

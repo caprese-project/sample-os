@@ -3,6 +3,7 @@
 #include <cstring>
 #include <iterator>
 #include <libcaprese/syscall.h>
+#include <memory>
 #include <mm/ipc.h>
 
 namespace {
@@ -89,7 +90,7 @@ bool elf_loader::load() {
 
   stream.seekg(header.e_phoff);
 
-  char* buf = new char[KILO_PAGE_SIZE];
+  std::unique_ptr<char[]> buf = std::make_unique<char[]>(KILO_PAGE_SIZE);
 
   for (size_t i = 0; i < header.e_phnum; ++i) {
     program_header prog_header;
@@ -121,7 +122,20 @@ bool elf_loader::load() {
     std::streampos pos = stream.tellg();
     stream.seekg(prog_header.p_offset);
 
-    for (uintptr_t va = va_start; va < va_end; va += KILO_PAGE_SIZE) {
+    uintptr_t va = va_start;
+
+    if (va_offset > 0) {
+      memset(buf.get(), 0, KILO_PAGE_SIZE);
+      stream.read(buf.get() + va_offset, KILO_PAGE_SIZE - va_offset);
+
+      if (!map_page(va_start, KILO_PAGE, flags, buf.get())) {
+        return false;
+      }
+
+      va += KILO_PAGE_SIZE;
+    }
+
+    for (; va < va_end; va += KILO_PAGE_SIZE) {
       char* data = nullptr;
 
       size_t offset = va - va_start;
@@ -132,22 +146,19 @@ bool elf_loader::load() {
           size = prog_header.p_filesz + va_offset - offset;
         }
 
-        memset(buf, 0, KILO_PAGE_SIZE);
-        stream.read(buf, size);
+        memset(buf.get(), 0, KILO_PAGE_SIZE);
+        stream.read(buf.get(), size);
 
-        data = buf;
+        data = buf.get();
       }
 
       if (!map_page(va, KILO_PAGE, flags, data)) {
-        delete[] buf;
         return false;
       }
     }
 
     stream.seekg(pos);
   }
-
-  delete[] buf;
 
   target_ref.get().set_register(REG_PROGRAM_COUNTER, header.e_entry);
 

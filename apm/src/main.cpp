@@ -1,14 +1,17 @@
+#include <apm/ramfs.h>
+#include <apm/server.h>
 #include <apm/task_manager.h>
 #include <crt/global.h>
 #include <crt/heap.h>
 #include <libcaprese/cap.h>
 #include <libcaprese/syscall.h>
+#include <service/mm.h>
 #include <sstream>
 #include <stdlib.h>
 
 extern "C" {
-  extern const char _dm_elf_start[];
-  extern const char _dm_elf_end[];
+  extern const char _ramfs_start[];
+  extern const char _ramfs_end[];
 }
 
 int main() {
@@ -22,7 +25,14 @@ int main() {
   __brk_start = __brk_pos - MEGA_PAGE_SIZE;
   __heap_init();
 
-  std::istringstream stream(std::string(_dm_elf_start, _dm_elf_end - _dm_elf_start), std::istringstream::binary);
+  apm_ep_cap = mm_fetch_and_create_endpoint_object();
+
+  ramfs              fs(_ramfs_start, _ramfs_end);
+  std::istringstream stream = fs.open_file("dm");
+  if (!stream) {
+    abort();
+  }
+
   if (!create_task("dm", std::ref<std::istream>(stream))) {
     abort();
   }
@@ -31,9 +41,5 @@ int main() {
   dm.resume();
   dm.switch_task();
 
-  while (true) {
-    sys_system_yield();
-  }
-
-  return 0;
+  run();
 }

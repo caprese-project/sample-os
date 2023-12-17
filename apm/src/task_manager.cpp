@@ -1,4 +1,5 @@
 #include <apm/elf_loader.h>
+#include <apm/server.h>
 #include <apm/task_manager.h>
 #include <crt/global.h>
 #include <libcaprese/syscall.h>
@@ -135,8 +136,8 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   task_cap_t dst_task_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_task_cap));
   task.set_register(REG_ARG_2, dst_task_cap);
 
-  task_cap_t copied_apm_cap = unwrap_sysret(sys_task_cap_copy(__this_task_cap));
-  task_cap_t dst_apm_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_apm_cap));
+  endpoint_cap_t copied_apm_cap = unwrap_sysret(sys_endpoint_cap_copy(apm_ep_cap));
+  endpoint_cap_t dst_apm_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_apm_cap));
   task.set_register(REG_ARG_3, dst_apm_cap);
 
   tasks.insert(std::pair(name, std::move(task)));

@@ -46,11 +46,13 @@ FetchContent_MakeAvailable(libcaprese)
 
 set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
+include(cmake/ramfs.cmake)
+
 add_subdirectory(init)
 add_subdirectory(mm)
 add_subdirectory(apm)
 add_subdirectory(dm)
-add_subdirectory(fs)
+add_subdirectory(dev)
 
 add_subdirectory(libc)
 
