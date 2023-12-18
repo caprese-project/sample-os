@@ -14,6 +14,8 @@ extern "C" {
   bool      mm_detach(id_cap_t id_cap);
   uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base);
   uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr_t src_va_base, uintptr_t dst_va_base);
+  uintptr_t mm_vpmap(id_cap_t id_cap, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base);
+  uintptr_t mm_vpremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base);
 
   mem_cap_t mm_fetch(size_t size, size_t alignment);
   bool      mm_revoke(mem_cap_t mem_cap);

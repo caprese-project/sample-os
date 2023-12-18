@@ -42,6 +42,8 @@ public:
   int        detach(id_cap_t id);
   int        vmap(id_cap_t id, int level, int flags, uintptr_t va_base, uintptr_t* act_va_base);
   int        vremap(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t src_va_base, uintptr_t dst_va_base, uintptr_t* act_va_base);
+  int        vpmap(id_cap_t id, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base, uintptr_t* act_va_base);
+  int        vpremap(id_cap_t src_id, id_cap_t dst_id, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base, uintptr_t* act_va_base);
   int        grow_stack(id_cap_t id, size_t size);
   task_info& get_task_info(id_cap_t id);
 
@@ -56,6 +58,8 @@ int        attach_task(id_cap_t id, task_cap_t task, page_table_cap_t root_page_
 int        detach_task(id_cap_t id);
 int        vmap_task(id_cap_t id, int level, int flags, uintptr_t va_base, uintptr_t* act_va_base);
 int        vremap_task(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t src_va_base, uintptr_t dst_va_base, uintptr_t* act_va_base);
+int        vpmap_task(id_cap_t id, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base, uintptr_t* act_va_base);
+int        vpremap_task(id_cap_t src_id, id_cap_t dst_id, int flags, virt_page_cap_t virt_page_cap, uintptr_t va_base, uintptr_t* act_va_base);
 int        grow_stack(id_cap_t id, size_t size);
 task_info& get_task_info(id_cap_t id);
 

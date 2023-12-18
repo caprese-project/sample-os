@@ -68,8 +68,4 @@ SECTIONS
     . += CONFIG_MM_ELF_SIZE;
     _mm_elf_end = .;
   }
-
-  . = ALIGN(0x1000);
-
-  _init_end = .;
 }

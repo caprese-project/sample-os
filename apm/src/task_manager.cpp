@@ -95,6 +95,10 @@ uintptr_t task::get_register(uintptr_t reg) const noexcept {
   return unwrap_sysret(sys_task_cap_get_reg(task_cap.get(), reg));
 }
 
+cap_t task::transfer_cap(cap_t cap) const noexcept {
+  return unwrap_sysret(sys_task_cap_transfer_cap(task_cap.get(), cap));
+}
+
 bool task::load_program(std::reference_wrapper<std::istream> data) {
   if (!task_cap) [[unlikely]] {
     return false;
@@ -140,9 +144,21 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   endpoint_cap_t dst_apm_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_apm_cap));
   task.set_register(REG_ARG_3, dst_apm_cap);
 
+  endpoint_cap_t copied_mm_cap = unwrap_sysret(sys_endpoint_cap_copy(__mm_ep_cap));
+  endpoint_cap_t dst_mm_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_mm_cap));
+  task.set_register(REG_ARG_4, dst_mm_cap);
+
+  id_cap_t copied_mm_id_cap = unwrap_sysret(sys_id_cap_copy(task.get_mm_id_cap().get()));
+  id_cap_t dst_mm_id_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_mm_id_cap));
+  task.set_register(REG_ARG_5, dst_mm_id_cap);
+
   tasks.insert(std::pair(name, std::move(task)));
 
   return true;
+}
+
+task& task_manager::lookup(const std::string name) {
+  return tasks.at(name);
 }
 
 const task& task_manager::lookup(const std::string name) const {
@@ -153,6 +169,6 @@ bool create_task(std::string name, std::reference_wrapper<std::istream> data) {
   return task_manager_instance.create(std::move(name), data);
 }
 
-const task& lookup_task(const std::string& name) {
+task& lookup_task(const std::string& name) {
   return task_manager_instance.lookup(name);
 }

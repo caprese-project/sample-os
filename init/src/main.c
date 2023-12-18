@@ -10,26 +10,11 @@ extern const char _apm_elf_start[];
 extern const char _apm_elf_end[];
 extern const char _mm_elf_start[];
 extern const char _mm_elf_end[];
-extern char       _init_end[];
 
 static id_cap_t apm_mm_id_cap;
 
-static mem_cap_t extract_dtb_mem_cap(root_boot_info_t* root_boot_info) {
-  for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
-    uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->mem_caps[i]));
-    uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(root_boot_info->mem_caps[i]));
-    uintptr_t end       = phys_addr + mem_size;
-
-    if (phys_addr <= root_boot_info->arch_info.dtb_start && root_boot_info->arch_info.dtb_start < end) {
-      return root_boot_info->mem_caps[i];
-    }
-
-    if (phys_addr <= root_boot_info->arch_info.dtb_end && root_boot_info->arch_info.dtb_end < end) {
-      return root_boot_info->mem_caps[i];
-    }
-  }
-
-  return 0;
+static void push_cap(message_buffer_t* msg_buf, cap_t cap) {
+  msg_buf->data[msg_buf->cap_part_length++] = msg_buf_transfer(cap);
 }
 
 static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment) {
@@ -39,13 +24,13 @@ static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment) {
   size_t mem_cap_size = 0;
 
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
-    bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->mem_caps[i]));
+    bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
     if (device) {
       continue;
     }
 
-    uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->mem_caps[i]));
-    uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(root_boot_info->mem_caps[i]));
+    uintptr_t phys_addr = unwrap_sysret(sys_mem_cap_phys_addr(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
+    uintptr_t mem_size  = unwrap_sysret(sys_mem_cap_size(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
     uintptr_t end       = phys_addr + mem_size;
 
     if (phys_addr <= root_boot_info->arch_info.dtb_start && root_boot_info->arch_info.dtb_start < end) {
@@ -56,7 +41,7 @@ static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment) {
       continue;
     }
 
-    uintptr_t used_size = unwrap_sysret(sys_mem_cap_used_size(root_boot_info->mem_caps[i]));
+    uintptr_t used_size = unwrap_sysret(sys_mem_cap_used_size(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
 
     uintptr_t base_addr = phys_addr + used_size;
     if (alignment > 0) {
@@ -79,7 +64,20 @@ static mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment) {
     return 0;
   }
 
-  return root_boot_info->mem_caps[index];
+  return root_boot_info->caps[root_boot_info->mem_caps_offset + index];
+}
+
+static endpoint_cap_t early_create_ep_cap() {
+  mem_cap_t ep_mem_cap = early_fetch_mem_cap(unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT)), unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT)));
+  if (ep_mem_cap == 0) {
+    abort();
+  }
+  return unwrap_sysret(sys_mem_cap_create_endpoint_object(ep_mem_cap));
+}
+
+static cap_t copy_ep_cap_and_transfer(task_cap_t task_cap, endpoint_cap_t ep_cap) {
+  cap_t cap_copy = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
+  return unwrap_sysret(sys_task_cap_transfer_cap(task_cap, cap_copy));
 }
 
 static void early_vmap(task_context_t* ctx, int flags, uintptr_t va, const void* data) {
@@ -137,8 +135,8 @@ static void early_vmap(task_context_t* ctx, int flags, uintptr_t va, const void*
   if (data == NULL) {
     unwrap_sysret(sys_page_table_cap_map_page(page_table_cap, get_page_table_index(va, KILO_PAGE), readable, writable, executable, virt_page_cap));
   } else {
-    unwrap_sysret(sys_page_table_cap_map_page(root_boot_info->page_table_caps[KILO_PAGE], get_page_table_index((uintptr_t)_init_end, KILO_PAGE), true, true, false, virt_page_cap));
-    memcpy(_init_end, data, KILO_PAGE_SIZE);
+    unwrap_sysret(sys_page_table_cap_map_page(root_boot_info->page_table_caps[KILO_PAGE], get_page_table_index(root_boot_info->root_task_end_address, KILO_PAGE), true, true, false, virt_page_cap));
+    memcpy((void*)root_boot_info->root_task_end_address, data, KILO_PAGE_SIZE);
     unwrap_sysret(sys_page_table_cap_remap_page(page_table_cap, get_page_table_index(va, KILO_PAGE), readable, writable, executable, virt_page_cap, root_boot_info->page_table_caps[KILO_PAGE]));
   }
 }
@@ -149,11 +147,13 @@ static void apm_vmap(task_context_t*, int flags, uintptr_t va, const void* data)
       abort();
     }
   } else {
-    uintptr_t src_va = mm_vmap(__mm_id_cap, KILO_PAGE, flags, (uintptr_t)_init_end);
+    root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
+
+    uintptr_t src_va = mm_vmap(__mm_id_cap, KILO_PAGE, flags, root_boot_info->root_task_end_address);
     if (src_va == 0) {
       abort();
     }
-    memcpy(_init_end, data, KILO_PAGE_SIZE);
+    memcpy((void*)root_boot_info->root_task_end_address, data, KILO_PAGE_SIZE);
     if (mm_vremap(__mm_id_cap, apm_mm_id_cap, flags, src_va, va) == 0) {
       abort();
     }
@@ -169,8 +169,6 @@ int main() {
   __this_task_cap = root_boot_info->root_task_cap;
 
   const int max_page = get_max_page();
-
-  mem_cap_t dtb_mem_cap = extract_dtb_mem_cap(root_boot_info);
 
   if (!create_task(&mm_ctx, early_fetch_mem_cap)) {
     abort();
@@ -189,41 +187,36 @@ int main() {
     abort();
   }
 
-  mem_cap_t ep_mem_cap = early_fetch_mem_cap(unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT)), unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT)));
-  if (ep_mem_cap == 0) {
-    abort();
-  }
+  endpoint_cap_t init_mm_ep_cap  = early_create_ep_cap();
+  endpoint_cap_t init_apm_ep_cap = early_create_ep_cap();
 
-  endpoint_cap_t ep_cap      = unwrap_sysret(sys_mem_cap_create_endpoint_object(ep_mem_cap));
-  endpoint_cap_t ep_cap_copy = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
-  endpoint_cap_t ep_cap_dst  = unwrap_sysret(sys_task_cap_transfer_cap(mm_ctx.task_cap, ep_cap_copy));
-
-  unwrap_sysret(sys_task_cap_set_reg(mm_ctx.task_cap, REG_ARG_0, ep_cap_dst));
+  unwrap_sysret(sys_task_cap_set_reg(mm_ctx.task_cap, REG_ARG_0, copy_ep_cap_and_transfer(mm_ctx.task_cap, init_mm_ep_cap)));
   unwrap_sysret(sys_task_cap_set_reg(mm_ctx.task_cap, REG_ARG_1, mm_ctx.heap_root));
 
   unwrap_sysret(sys_task_cap_resume(mm_ctx.task_cap));
   unwrap_sysret(sys_task_cap_switch(mm_ctx.task_cap));
 
   message_buffer_t msg_buf;
-  msg_buf.cap_part_length = 2 + max_page;
-  msg_buf.data[0]         = msg_buf_transfer(unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap)));
-  msg_buf.data[1]         = msg_buf_transfer(root_boot_info->root_page_table_cap);
-  for (int i = 0; i < max_page; ++i) {
-    msg_buf.data[2 + i] = msg_buf_transfer(root_boot_info->page_table_caps[i]);
-  }
-  msg_buf.cap_part_length += root_boot_info->num_mem_caps - 1;
-  size_t dtb_cap_pos;
-  for (dtb_cap_pos = 0; dtb_cap_pos < root_boot_info->num_mem_caps; ++dtb_cap_pos) {
-    if (root_boot_info->mem_caps[dtb_cap_pos] == dtb_mem_cap) {
-      break;
-    }
-    msg_buf.data[2 + max_page + dtb_cap_pos] = msg_buf_transfer(root_boot_info->mem_caps[dtb_cap_pos]);
-  }
-  for (size_t i = dtb_cap_pos + 1; i < root_boot_info->num_mem_caps; ++i) {
-    msg_buf.data[2 + max_page + i - 1] = root_boot_info->mem_caps[i];
-  }
+  msg_buf.cap_part_length  = 0;
   msg_buf.data_part_length = 0;
-  unwrap_sysret(sys_endpoint_cap_call(ep_cap, &msg_buf));
+
+  push_cap(&msg_buf, unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap)));
+  push_cap(&msg_buf, root_boot_info->root_page_table_cap);
+
+  for (int i = 0; i < max_page; ++i) {
+    push_cap(&msg_buf, root_boot_info->page_table_caps[i]);
+  }
+
+  for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
+    bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
+    if (device) {
+      continue;
+    }
+
+    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->mem_caps_offset + i]);
+  }
+
+  unwrap_sysret(sys_endpoint_cap_call(init_mm_ep_cap, &msg_buf));
 
   if (msg_buf.cap_part_length != 2) {
     abort();
@@ -247,14 +240,39 @@ int main() {
     abort();
   }
 
-  endpoint_cap_t mm_ep_cap_dst     = unwrap_sysret(sys_task_cap_transfer_cap(apm_ctx.task_cap, __mm_ep_cap));
-  id_cap_t       apm_mm_id_cap_dst = unwrap_sysret(sys_task_cap_transfer_cap(apm_ctx.task_cap, apm_mm_id_cap));
-
-  unwrap_sysret(sys_task_cap_set_reg(apm_ctx.task_cap, REG_ARG_0, mm_ep_cap_dst));
-  unwrap_sysret(sys_task_cap_set_reg(apm_ctx.task_cap, REG_ARG_1, apm_mm_id_cap_dst));
+  unwrap_sysret(sys_task_cap_set_reg(apm_ctx.task_cap, REG_ARG_4, copy_ep_cap_and_transfer(apm_ctx.task_cap, __mm_ep_cap)));
+  unwrap_sysret(sys_task_cap_set_reg(apm_ctx.task_cap, REG_ARG_5, unwrap_sysret(sys_task_cap_transfer_cap(apm_ctx.task_cap, apm_mm_id_cap))));
+  unwrap_sysret(sys_task_cap_set_reg(apm_ctx.task_cap, REG_ARG_0, copy_ep_cap_and_transfer(apm_ctx.task_cap, init_apm_ep_cap)));
 
   unwrap_sysret(sys_task_cap_resume(apm_ctx.task_cap));
   unwrap_sysret(sys_task_cap_switch(apm_ctx.task_cap));
+
+  msg_buf.cap_part_length  = 0;
+  msg_buf.data_part_length = 1;
+
+  push_cap(&msg_buf, unwrap_sysret(sys_id_cap_copy(__mm_id_cap)));
+
+  for (size_t i = 0; i < root_boot_info->arch_info.num_dtb_vp_caps; ++i) {
+    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->arch_info.dtb_vp_caps_offset + i]);
+  }
+
+  for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
+    // non-device memory caps are already sent to mm. thus, type of the cap is CAP_NULL.
+    if (unwrap_sysret(sys_cap_type(root_boot_info->caps[root_boot_info->mem_caps_offset + i])) != CAP_MEM) {
+      continue;
+    }
+
+    bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
+    if (!device) {
+      abort();
+    }
+
+    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->mem_caps_offset + i]);
+  }
+
+  msg_buf.data[msg_buf.cap_part_length] = root_boot_info->arch_info.num_dtb_vp_caps;
+
+  unwrap_sysret(sys_endpoint_cap_send_long(init_apm_ep_cap, &msg_buf));
 
   while (true) {
     unwrap_sysret(sys_system_yield());

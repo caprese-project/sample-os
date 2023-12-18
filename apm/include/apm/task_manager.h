@@ -37,6 +37,8 @@ public:
   void      set_register(uintptr_t reg, uintptr_t value) noexcept;
   uintptr_t get_register(uintptr_t reg) const noexcept;
 
+  cap_t transfer_cap(cap_t cap) const noexcept;
+
   bool load_program(std::reference_wrapper<std::istream> data);
 
   void kill() const;
@@ -50,10 +52,11 @@ class task_manager {
 
 public:
   bool        create(std::string name, std::reference_wrapper<std::istream> data);
+  task&       lookup(const std::string name);
   const task& lookup(const std::string name) const;
 };
 
-bool        create_task(std::string name, std::reference_wrapper<std::istream> data);
-const task& lookup_task(const std::string& name);
+bool  create_task(std::string name, std::reference_wrapper<std::istream> data);
+task& lookup_task(const std::string& name);
 
 #endif // APM_TASK_MANAGER_H_

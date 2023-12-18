@@ -149,6 +149,84 @@ namespace {
     msg_buf->data[1]          = act_va_base;
   }
 
+  void vpmap(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VPMAP);
+
+    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    id_cap_t        id_cap        = msg_buf->data[0];
+    virt_page_cap_t virt_page_cap = msg_buf->data[1];
+    int             flags         = msg_buf->data[msg_buf->cap_part_length + 1];
+    uintptr_t       va_base       = msg_buf->data[msg_buf->cap_part_length + 2];
+
+    if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(virt_page_cap)) != CAP_VIRT_PAGE) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    uintptr_t act_va_base;
+    int       result = vpmap_task(id_cap, flags, virt_page_cap, va_base, &act_va_base);
+
+    sys_cap_destroy(id_cap);
+
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      msg_buf->cap_part_length  = 0;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = result;
+      return;
+    }
+
+    msg_buf->cap_part_length  = 0;
+    msg_buf->data_part_length = 2;
+    msg_buf->data[0]          = MM_CODE_S_OK;
+    msg_buf->data[1]          = act_va_base;
+  }
+
+  void vpremap(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VPREMAP);
+
+    if (msg_buf->cap_part_length != 3 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    id_cap_t        src_id_cap    = msg_buf->data[0];
+    id_cap_t        dst_id_cap    = msg_buf->data[1];
+    virt_page_cap_t virt_page_cap = msg_buf->data[2];
+    int             flags         = msg_buf->data[msg_buf->cap_part_length + 1];
+    uintptr_t       va_base       = msg_buf->data[msg_buf->cap_part_length + 2];
+
+    if (unwrap_sysret(sys_cap_type(src_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(dst_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(virt_page_cap)) != CAP_VIRT_PAGE) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    uintptr_t act_va_base;
+    int       result = vpremap_task(src_id_cap, dst_id_cap, flags, virt_page_cap, va_base, &act_va_base);
+
+    sys_cap_destroy(src_id_cap);
+    sys_cap_destroy(dst_id_cap);
+
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      msg_buf->cap_part_length  = 0;
+      msg_buf->data_part_length = 1;
+      msg_buf->data[0]          = result;
+      return;
+    }
+
+    msg_buf->cap_part_length  = 0;
+    msg_buf->data_part_length = 2;
+    msg_buf->data[0]          = MM_CODE_S_OK;
+    msg_buf->data[1]          = act_va_base;
+  }
+
   void fetch(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_FETCH);
 
@@ -211,6 +289,23 @@ namespace {
     msg_buf->data[0]          = MM_CODE_S_OK;
   }
 
+  // clang-format off
+
+  void (*const table[])(message_buffer_t*) = {
+    [0]                   = nullptr,
+    [MM_MSG_TYPE_ATTACH]  = attach,
+    [MM_MSG_TYPE_DETACH]  = detach,
+    [MM_MSG_TYPE_VMAP]    = vmap,
+    [MM_MSG_TYPE_VREMAP]  = vremap,
+    [MM_MSG_TYPE_VPMAP]   = vpmap,
+    [MM_MSG_TYPE_VPREMAP] = vpremap,
+    [MM_MSG_TYPE_FETCH]   = fetch,
+    [MM_MSG_TYPE_REVOKE]  = revoke,
+    [MM_MSG_TYPE_INFO]    = info,
+  };
+
+  // clang-format on
+
   void proc_msg(message_buffer_t* msg_buf) {
     assert(msg_buf != NULL);
 
@@ -222,32 +317,11 @@ namespace {
 
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
-    switch (msg_type) {
-      case MM_MSG_TYPE_ATTACH:
-        attach(msg_buf);
-        break;
-      case MM_MSG_TYPE_DETACH:
-        detach(msg_buf);
-        break;
-      case MM_MSG_TYPE_VMAP:
-        vmap(msg_buf);
-        break;
-      case MM_MSG_TYPE_VREMAP:
-        vremap(msg_buf);
-        break;
-      case MM_MSG_TYPE_FETCH:
-        fetch(msg_buf);
-        break;
-      case MM_MSG_TYPE_REVOKE:
-        revoke(msg_buf);
-        break;
-      case MM_MSG_TYPE_INFO:
-        info(msg_buf);
-        break;
-      default:
-        msg_buf->data_part_length               = 1;
-        msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
-        break;
+    if (msg_type < MM_MSG_TYPE_ATTACH || msg_type > MM_MSG_TYPE_INFO) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
+    } else {
+      table[msg_type](msg_buf);
     }
   }
 } // namespace

@@ -15,8 +15,9 @@ extern "C" {
 }
 
 int main() {
-  __mm_ep_cap = __init_context.__arg_regs[0];
-  __mm_id_cap = __init_context.__arg_regs[1];
+  endpoint_cap_t init_task_ep_cap = __init_context.__arg_regs[0];
+
+  assert(unwrap_sysret(sys_cap_type(init_task_ep_cap)) == CAP_ENDPOINT);
 
   if (__heap_sbrk() == nullptr) [[unlikely]] {
     abort();
@@ -37,7 +38,8 @@ int main() {
     abort();
   }
 
-  const task& dm = lookup_task("dm");
+  task& dm = lookup_task("dm");
+  dm.set_register(REG_ARG_0, dm.transfer_cap(init_task_ep_cap));
   dm.resume();
   dm.switch_task();
 

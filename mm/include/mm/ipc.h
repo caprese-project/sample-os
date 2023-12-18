@@ -1,13 +1,15 @@
 #ifndef MM_IPC_H_
 #define MM_IPC_H_
 
-#define MM_MSG_TYPE_ATTACH 1
-#define MM_MSG_TYPE_DETACH 2
-#define MM_MSG_TYPE_VMAP   3
-#define MM_MSG_TYPE_VREMAP 4
-#define MM_MSG_TYPE_FETCH  5
-#define MM_MSG_TYPE_REVOKE 6
-#define MM_MSG_TYPE_INFO   7
+#define MM_MSG_TYPE_ATTACH  1
+#define MM_MSG_TYPE_DETACH  2
+#define MM_MSG_TYPE_VMAP    3
+#define MM_MSG_TYPE_VREMAP  4
+#define MM_MSG_TYPE_VPMAP   5
+#define MM_MSG_TYPE_VPREMAP 6
+#define MM_MSG_TYPE_FETCH   7
+#define MM_MSG_TYPE_REVOKE  8
+#define MM_MSG_TYPE_INFO    9
 
 #define MM_CODE_S_OK               0
 #define MM_CODE_E_FAILURE          1

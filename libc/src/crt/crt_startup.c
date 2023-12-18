@@ -13,6 +13,8 @@ void __crt_cleanup() {
 int __crt_startup() {
   __this_task_cap = __init_context.__arg_regs[2];
   __apm_ep_cap    = __init_context.__arg_regs[3];
+  __mm_ep_cap     = __init_context.__arg_regs[4];
+  __mm_id_cap     = __init_context.__arg_regs[5];
 
   __if_unlikely (atexit(__crt_cleanup) != 0) {
     return 1;
