@@ -1,5 +1,6 @@
 #include <cassert>
 #include <crt/global.h>
+#include <dm/dtb.h>
 #include <libcaprese/syscall.h>
 #include <service/mm.h>
 
@@ -31,6 +32,21 @@ int main() {
   }
 
   sys_cap_destroy(msg_buf.data[0]);
+
+  device_tree dt(reinterpret_cast<const char*>(dtb_addr), reinterpret_cast<const char*>(dtb_addr + KILO_PAGE_SIZE * num_dtb_vp_caps));
+
+  const device_tree_node&         chosen_node            = dt.get_node("/chosen");
+  const device_tree_property&     stdout_path_prop       = chosen_node.properties.at("stdout-path");
+  const std::string&              stdout_path            = std::get<std::string>(stdout_path_prop.value);
+  const device_tree_node&         stdout_node            = dt.get_node(stdout_path.substr(0, stdout_path.find('@')));
+  const device_tree_property&     stdout_compatible_prop = stdout_node.properties.at("compatible");
+  const std::vector<std::string>& stdout_compatibles     = std::get<std::vector<std::string>>(stdout_compatible_prop.value);
+
+  for (const std::string& stdout_compatible : stdout_compatibles) {
+    if (stdout_compatible == "ns16550a") {
+      [[maybe_unused]] int i = 0;
+    }
+  }
 
   while (true) { }
 

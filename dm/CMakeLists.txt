@@ -4,6 +4,7 @@ add_executable(dm)
 
 target_sources(
   dm PRIVATE
+  src/dtb.cpp
   src/main.cpp
 )
 

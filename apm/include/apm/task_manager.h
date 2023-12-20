@@ -52,8 +52,8 @@ class task_manager {
 
 public:
   bool        create(std::string name, std::reference_wrapper<std::istream> data);
-  task&       lookup(const std::string name);
-  const task& lookup(const std::string name) const;
+  task&       lookup(const std::string& name);
+  const task& lookup(const std::string& name) const;
 };
 
 bool  create_task(std::string name, std::reference_wrapper<std::istream> data);

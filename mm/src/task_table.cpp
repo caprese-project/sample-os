@@ -283,7 +283,7 @@ int task_table::vpremap(id_cap_t src_id, id_cap_t dst_id, int flags, virt_page_c
     return MM_CODE_E_FAILURE;
   }
 
-  page_table_cap_t dst_page_table_cap = walk(src_id, level, va_base);
+  page_table_cap_t dst_page_table_cap = walk(dst_id, level, va_base);
   if (dst_page_table_cap == 0) [[unlikely]] {
     return MM_CODE_E_FAILURE;
   }

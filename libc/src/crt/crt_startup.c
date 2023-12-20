@@ -20,8 +20,13 @@ int __crt_startup() {
     return 1;
   }
 
-  if (__apm_ep_cap != 0) {
-    // TODO
+  if (__apm_ep_cap != 0 && __mm_id_cap != 0) {
+    void* heap_start = __heap_sbrk();
+    __if_unlikely (heap_start == NULL) {
+      return 1;
+    }
+    __brk_start = (uintptr_t)heap_start;
+    __heap_init();
   }
 
   for (void (**constructor)() = __init_array_start; constructor != __init_array_end; ++constructor) {

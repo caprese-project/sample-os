@@ -152,16 +152,16 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   id_cap_t dst_mm_id_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_mm_id_cap));
   task.set_register(REG_ARG_5, dst_mm_id_cap);
 
-  tasks.insert(std::pair(name, std::move(task)));
+  tasks.emplace(std::move(name), std::move(task));
 
   return true;
 }
 
-task& task_manager::lookup(const std::string name) {
+task& task_manager::lookup(const std::string& name) {
   return tasks.at(name);
 }
 
-const task& task_manager::lookup(const std::string name) const {
+const task& task_manager::lookup(const std::string& name) const {
   return tasks.at(name);
 }
 
