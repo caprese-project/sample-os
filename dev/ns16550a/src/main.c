@@ -31,6 +31,9 @@ int main() {
   while (1) {
     int ch = uart_getc();
     if (ch != -1) {
+      if (ch == '\r') {
+        ch = '\n';
+      }
       uart_putc(ch);
     }
   }
