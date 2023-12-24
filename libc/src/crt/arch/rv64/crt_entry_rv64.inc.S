@@ -24,10 +24,10 @@ _start:
   la t0, __init_context
   sd a0, 0(t0)  # argc
   sd a1, 8(t0)  # argv
-  sd a2, 16(t0) # this-task cap
-  sd a3, 24(t0) # apm-task cap
-  sd a4, 32(t0)
-  sd a5, 40(t0)
+  sd a2, 16(t0) # this task cap
+  sd a3, 24(t0) # apm ep cap
+  sd a4, 32(t0) # mm ep cap
+  sd a5, 40(t0) # mm id cap
   sd a6, 48(t0)
   sd a7, 56(t0)
 

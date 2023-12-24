@@ -1,3 +1,4 @@
+#include <apm/ipc.h>
 #include <apm/ramfs.h>
 #include <apm/server.h>
 #include <apm/task_manager.h>
@@ -34,7 +35,7 @@ int main() {
     abort();
   }
 
-  if (!create_task("dm", std::ref<std::istream>(stream))) {
+  if (!create_task("dm", std::ref<std::istream>(stream), APM_CREATE_FLAG_SUSPENDED)) {
     abort();
   }
 

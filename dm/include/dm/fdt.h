@@ -28,6 +28,9 @@ constexpr uint32_t FDT_PROP         = 0x00000003;
 constexpr uint32_t FDT_NOP          = 0x00000004;
 constexpr uint32_t FDT_END          = 0x00000009;
 
+constexpr uint32_t FDT_DEFAULT_ADDRESS_CELLS = 2;
+constexpr uint32_t FDT_DEFAULT_SIZE_CELLS    = 1;
+
 // clang-format off
 
 constexpr const char* FDT_U32_TYPES[] = {
@@ -43,7 +46,6 @@ constexpr const char* FDT_U32_TYPES[] = {
   "d-cache-line-size",
   "d-cache-sets",
   "d-cache-size",
-  "d-tlb-sets",
   "d-tlb-sets",
   "d-tlb-size",
   "i-cache-block-size",

@@ -135,6 +135,7 @@ namespace {
     int       result = vremap_task(src_id_cap, dst_id_cap, flags, src_va_base, dst_va_base, &act_va_base);
 
     sys_cap_destroy(src_id_cap);
+    sys_cap_destroy(dst_id_cap);
 
     if (result != MM_CODE_S_OK) [[unlikely]] {
       msg_buf->cap_part_length  = 0;
@@ -309,7 +310,7 @@ namespace {
   void proc_msg(message_buffer_t* msg_buf) {
     assert(msg_buf != NULL);
 
-    if (msg_buf->data_part_length == 0) {
+    if (msg_buf->data_part_length == 0) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -335,7 +336,7 @@ namespace {
 
   sysret.error = SYS_E_UNKNOWN;
   while (true) {
-    if (unwrap_sysret(sys_task_cap_get_free_slot_count(__this_task_cap)) < 0x10) [[unlikely]] {
+    if (unwrap_sysret(sys_task_cap_get_free_slot_count(__this_task_cap)) < 0x20) [[unlikely]] {
       mem_cap_t mem_cap = fetch_mem_cap(cap_space_size, cap_space_align);
       if (mem_cap == 0) [[unlikely]] {
         abort();

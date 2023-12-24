@@ -149,11 +149,11 @@ static void apm_vmap(task_context_t*, int flags, uintptr_t va, const void* data)
   } else {
     root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
 
-    uintptr_t src_va = mm_vmap(__mm_id_cap, KILO_PAGE, flags, root_boot_info->root_task_end_address);
+    uintptr_t src_va = mm_vmap(__mm_id_cap, KILO_PAGE, flags | MM_VMAP_FLAG_WRITE, root_boot_info->root_task_end_address);
     if (src_va == 0) {
       abort();
     }
-    memcpy((void*)root_boot_info->root_task_end_address, data, KILO_PAGE_SIZE);
+    memcpy((void*)src_va, data, KILO_PAGE_SIZE);
     if (mm_vremap(__mm_id_cap, apm_mm_id_cap, flags, src_va, va) == 0) {
       abort();
     }

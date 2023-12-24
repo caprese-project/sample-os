@@ -80,7 +80,7 @@ uintptr_t mm_vmap(id_cap_t id_cap, int level, int flags, uintptr_t va_base) {
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
 
-  sys_cap_revoke(id_cap);
+  assert(unwrap_sysret(sys_cap_type(id_cap)) == CAP_ID);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;
@@ -114,8 +114,8 @@ uintptr_t mm_vremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, uintptr
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
 
-  sys_cap_revoke(src_id_cap);
-  sys_cap_revoke(dst_id_cap);
+  assert(unwrap_sysret(sys_cap_type(src_id_cap)) == CAP_ID);
+  assert(unwrap_sysret(sys_cap_type(dst_id_cap)) == CAP_ID);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;
@@ -149,7 +149,7 @@ uintptr_t mm_vpmap(id_cap_t id_cap, int flags, virt_page_cap_t virt_page_cap, ui
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
 
-  sys_cap_revoke(id_cap);
+  assert(unwrap_sysret(sys_cap_type(id_cap)) == CAP_ID);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;
@@ -185,8 +185,8 @@ uintptr_t mm_vpremap(id_cap_t src_id_cap, id_cap_t dst_id_cap, int flags, virt_p
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, &msg_buf);
 
-  sys_cap_revoke(src_id_cap);
-  sys_cap_revoke(dst_id_cap);
+  assert(unwrap_sysret(sys_cap_type(src_id_cap)) == CAP_ID);
+  assert(unwrap_sysret(sys_cap_type(dst_id_cap)) == CAP_ID);
 
   __if_unlikely (sysret_failed(sysret)) {
     return 0;

@@ -1,4 +1,5 @@
 #include <apm/elf_loader.h>
+#include <apm/ipc.h>
 #include <apm/server.h>
 #include <apm/task_manager.h>
 #include <crt/global.h>
@@ -125,7 +126,7 @@ void task::suspend() const {
   sys_task_cap_suspend(task_cap.get());
 }
 
-bool task_manager::create(std::string name, std::reference_wrapper<std::istream> data) {
+bool task_manager::create(std::string name, std::reference_wrapper<std::istream> data, int flags) {
   if (tasks.contains(name)) [[unlikely]] {
     return false;
   }
@@ -154,6 +155,10 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
 
   tasks.emplace(std::move(name), std::move(task));
 
+  if ((flags & APM_CREATE_FLAG_SUSPENDED) == 0) {
+    tasks.at(name).resume();
+  }
+
   return true;
 }
 
@@ -165,8 +170,8 @@ const task& task_manager::lookup(const std::string& name) const {
   return tasks.at(name);
 }
 
-bool create_task(std::string name, std::reference_wrapper<std::istream> data) {
-  return task_manager_instance.create(std::move(name), data);
+bool create_task(std::string name, std::reference_wrapper<std::istream> data, int flags) {
+  return task_manager_instance.create(std::move(name), data, flags);
 }
 
 task& lookup_task(const std::string& name) {

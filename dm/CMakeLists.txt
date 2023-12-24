@@ -4,6 +4,7 @@ add_executable(dm)
 
 target_sources(
   dm PRIVATE
+  src/device_manager.cpp
   src/dtb.cpp
   src/main.cpp
 )

@@ -20,6 +20,7 @@ target_sources(
   src/crt/crt_startup.c
   src/crt/global.c
   src/crt/heap.c
+  src/service/apm.c
   src/service/mm.c
   src/signal.c
   src/stdio.c
@@ -29,7 +30,7 @@ target_sources(
 target_compile_features(libc PRIVATE c_std_17)
 target_compile_options(libc PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
-target_include_directories(libc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${ROOT_DIR}/mm/include)
+target_include_directories(libc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${ROOT_DIR}/mm/include ${ROOT_DIR}/apm/include)
 
 target_link_libraries(libc PUBLIC caprese_libc libcaprese)
 

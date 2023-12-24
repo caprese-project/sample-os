@@ -9,8 +9,8 @@
 #include <vector>
 
 struct device_tree_property {
-  std::string                                                                                name;
-  std::variant<uint32_t, uint64_t, std::string, std::vector<char>, std::vector<std::string>> value;
+  std::string                                                                                                                           name;
+  std::variant<uint32_t, uint64_t, std::string, std::vector<char>, std::vector<std::string>, std::vector<std::pair<uintptr_t, size_t>>> value;
 };
 
 struct device_tree_node {
@@ -32,8 +32,7 @@ class device_tree {
   device_tree_node root;
 
 private:
-  void             load(const char* begin, const char* end);
-  device_tree_node parse_node(std::istream& stream, uint32_t off_dt_struct, uint32_t off_dt_strings, const std::string& dir);
+  device_tree_node parse_node(std::istream& stream, uint32_t off_dt_struct, uint32_t off_dt_strings, const std::string& dir, size_t address_cells, size_t size_cells);
   void             back_u32(std::istream& stream);
   uint32_t         read_u32(std::istream& stream);
   uint64_t         read_u64(std::istream& stream);
@@ -42,7 +41,7 @@ private:
   void             align(std::istream& stream);
 
 public:
-  device_tree(const char* begin, const char* end);
+  void load(const char* begin, const char* end);
 
   [[nodiscard]] bool                    has_node(const std::string& full_path) const;
   [[nodiscard]] const device_tree_node& get_node(const std::string& full_path) const;

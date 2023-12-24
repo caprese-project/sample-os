@@ -5,6 +5,7 @@ add_executable(ns16550a)
 target_sources(
   ns16550a PRIVATE
   src/main.c
+  src/uart.c
 )
 
 target_compile_features(ns16550a PRIVATE c_std_17)

@@ -51,12 +51,12 @@ class task_manager {
   std::map<std::string, task> tasks;
 
 public:
-  bool        create(std::string name, std::reference_wrapper<std::istream> data);
+  bool        create(std::string name, std::reference_wrapper<std::istream> data, int flags);
   task&       lookup(const std::string& name);
   const task& lookup(const std::string& name) const;
 };
 
-bool  create_task(std::string name, std::reference_wrapper<std::istream> data);
+bool  create_task(std::string name, std::reference_wrapper<std::istream> data, int flags);
 task& lookup_task(const std::string& name);
 
 #endif // APM_TASK_MANAGER_H_

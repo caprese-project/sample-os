@@ -356,7 +356,7 @@ page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {
       }
 
       int              parent_level         = lv + 1;
-      page_table_cap_t parent_page_table    = info.page_table_caps[lv + 1][get_page_table_base_addr(va_base, parent_level)];
+      page_table_cap_t parent_page_table    = info.page_table_caps[parent_level].at(get_page_table_base_addr(va_base, parent_level));
       int              parent_index         = get_page_table_index(va_base, parent_level);
       page_table_cap_t child_page_table_cap = unwrap_sysret(sys_mem_cap_create_page_table_object(mem_cap));
       if (sysret_failed(sys_page_table_cap_map_table(parent_page_table, parent_index, child_page_table_cap))) [[unlikely]] {
@@ -367,7 +367,7 @@ page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {
     }
   }
 
-  return info.page_table_caps[level][get_page_table_base_addr(va_base, level)];
+  return info.page_table_caps[level].at(get_page_table_base_addr(va_base, level));
 }
 
 int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base) {

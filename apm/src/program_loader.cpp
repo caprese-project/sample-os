@@ -24,7 +24,10 @@ bool program_loader::map_page(uintptr_t va, int level, int flags, const void* da
       return false;
     }
   } else {
-    mm_vmap(target_ref.get().get_mm_id_cap().get(), level, flags, va);
+    uintptr_t addr = mm_vmap(target_ref.get().get_mm_id_cap().get(), level, flags, va);
+    if (addr == 0) [[unlikely]] {
+      return false;
+    }
   }
 
   return true;
