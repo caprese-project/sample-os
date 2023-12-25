@@ -23,3 +23,5 @@ target_link_options(
   -nostdlib
   -z max-page-size=4096
 )
+
+add_ramfs(dm)

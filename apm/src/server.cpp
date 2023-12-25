@@ -1,17 +1,15 @@
 #include <apm/ipc.h>
-#include <apm/ramfs.h>
 #include <apm/server.h>
 #include <apm/task_manager.h>
 #include <crt/global.h>
+#include <cstring>
 #include <istream>
 #include <libcaprese/syscall.h>
+#include <memory>
+#include <service/fs.h>
 #include <service/mm.h>
-#include <string.h>
-
-extern "C" {
-  extern const char _ramfs_start[];
-  extern const char _ramfs_end[];
-}
+#include <sstream>
+#include <string>
 
 endpoint_cap_t apm_ep_cap;
 
@@ -25,46 +23,129 @@ namespace {
       return;
     }
 
-    int         flags       = static_cast<int>(msg_buf->data[1]);
-    char*       start_start = reinterpret_cast<char*>(&msg_buf->data[2]);
-    std::string path        = start_start;
-    std::string name        = start_start + path.size() + 1;
+    int         flags     = static_cast<int>(msg_buf->data[1]);
+    char*       str_start = reinterpret_cast<char*>(&msg_buf->data[2]);
+    std::string path      = str_start;
+    std::string name      = str_start + path.size() + 1;
 
-    if (path.starts_with("/init/")) [[unlikely]] {
-      ramfs              fs(_ramfs_start, _ramfs_end);
-      std::istringstream stream = fs.open_file(path.substr(6).c_str());
-
-      if (!stream) [[unlikely]] {
+    if (__fs_ep_cap == 0) [[unlikely]] {
+      if (!task_exists("fs")) {
         msg_buf->data_part_length               = 1;
         msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_FILE;
         return;
       }
 
-      if (!create_task(name, std::ref<std::istream>(stream), flags)) [[unlikely]] {
-        msg_buf->data_part_length               = 1;
-        msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
-        return;
-      }
+      const task& fs_task = lookup_task("fs");
+      __fs_ep_cap         = fs_task.get_ep_cap().get();
+    }
 
-      const task& task = lookup_task(name);
+    id_cap_t fd = fs_open(path.c_str());
 
-      msg_buf->cap_part_length                = 1;
-      msg_buf->data[0]                        = unwrap_sysret(sys_task_cap_copy(task.get_task_cap().get()));
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_S_OK;
-    } else {
+    if (fd == 0) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_FILE;
+      return;
     }
+
+    // TODO: fstream
+    std::string data;
+    {
+      std::unique_ptr<char[]> buf = std::make_unique<char[]>(0x1000);
+      while (true) {
+        size_t read_size = fs_read(fd, buf.get(), 0x1000);
+        if (read_size == static_cast<size_t>(-1)) [[unlikely]] {
+          msg_buf->data_part_length               = 1;
+          msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
+          return;
+        }
+        if (read_size == 0) [[unlikely]] {
+          break;
+        }
+        data.append(buf.get(), read_size);
+        if (read_size < 0x1000) [[unlikely]] {
+          break;
+        }
+      }
+    }
+
+    std::istringstream stream(data, std::ios_base::binary);
+    if (!create_task(name, std::ref<std::istream>(stream), flags)) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
+      return;
+    }
+
+    const task& task = lookup_task(name);
+
+    msg_buf->cap_part_length                = 1;
+    msg_buf->data[0]                        = unwrap_sysret(sys_task_cap_copy(task.get_task_cap().get()));
+    msg_buf->data_part_length               = 1;
+    msg_buf->data[msg_buf->cap_part_length] = APM_CODE_S_OK;
   }
 
   void lookup(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == APM_MSG_TYPE_LOOKUP);
 
-    // TODO: impl
+    if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
+      return;
+    }
 
+    char*       str_start = reinterpret_cast<char*>(&msg_buf->data[1]);
+    std::string name      = str_start;
+
+    if (!task_exists(name)) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_TASK;
+      return;
+    }
+
+    const task& task = lookup_task(name);
+
+    msg_buf->cap_part_length                = 1;
+    msg_buf->data[0]                        = unwrap_sysret(sys_endpoint_cap_copy(task.get_ep_cap().get()));
     msg_buf->data_part_length               = 1;
-    msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
+    msg_buf->data[msg_buf->cap_part_length] = APM_CODE_S_OK;
+  }
+
+  void attach(message_buffer_t* msg_buf) {
+    assert(msg_buf->data[msg_buf->cap_part_length] == APM_MSG_TYPE_ATTACH);
+
+    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    task_cap_t task_cap = msg_buf->data[0];
+
+    if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    endpoint_cap_t ep_cap = msg_buf->data[1];
+
+    if (unwrap_sysret(sys_cap_type(ep_cap)) != CAP_ENDPOINT) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
+      return;
+    }
+
+    char*       str_start = reinterpret_cast<char*>(&msg_buf->data[msg_buf->cap_part_length + 1]);
+    std::string name      = str_start;
+
+    if (!attach_task(name, task_cap, ep_cap)) [[unlikely]] {
+      msg_buf->data_part_length               = 1;
+      msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
+      return;
+    }
+
+    msg_buf->cap_part_length                = 0;
+    msg_buf->data_part_length               = 1;
+    msg_buf->data[msg_buf->cap_part_length] = APM_CODE_S_OK;
   }
 
   // clang-format off
@@ -73,6 +154,7 @@ namespace {
     [0]                   = nullptr,
     [APM_MSG_TYPE_CREATE] = create,
     [APM_MSG_TYPE_LOOKUP] = lookup,
+    [APM_MSG_TYPE_ATTACH] = attach,
   };
 
   // clang-format on
@@ -88,7 +170,7 @@ namespace {
 
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
-    if (msg_type < APM_MSG_TYPE_CREATE || msg_type > APM_MSG_TYPE_LOOKUP) [[unlikely]] {
+    if (msg_type < APM_MSG_TYPE_CREATE || msg_type > APM_MSG_TYPE_ATTACH) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
     } else {

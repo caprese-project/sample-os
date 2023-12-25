@@ -6,6 +6,8 @@ set(CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS 0xa0000000)
 
 target_sources(
   init PRIVATE
+  src/cpio.c
+  src/launch.c
   src/main.c
   src/section.s
   src/task.c
@@ -24,7 +26,7 @@ add_custom_target(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ldS
   BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
 )
-add_dependencies(init_linker mm_size apm_size)
+add_dependencies(init_linker ramfs_size)
 add_dependencies(init init_linker)
 
 target_link_options(
@@ -38,9 +40,9 @@ set_target_properties(init PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/l
 
 add_custom_target(
   root_task_payload
-  COMMAND ${CMAKE_OBJCOPY} -O binary --update-section .apm_elf=$<TARGET_FILE_DIR:apm>/apm.elf --update-section .mm_elf=$<TARGET_FILE_DIR:mm>/mm.elf $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
+  COMMAND ${CMAKE_OBJCOPY} -O binary --strip-unneeded --update-section .ramfs=${GENERATE_DIR}/ramfs $<TARGET_FILE:init> $<TARGET_FILE_DIR:init>/payload
 )
-add_dependencies(root_task_payload init apm_elf mm_elf)
+add_dependencies(root_task_payload init ramfs_data)
 
 set(CONFIG_ROOT_TASK_PAYLOAD $<TARGET_FILE_DIR:init>/payload PARENT_SCOPE)
 set(CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS ${CONFIG_ROOT_TASK_PAYLOAD_BASE_ADDRESS} PARENT_SCOPE)

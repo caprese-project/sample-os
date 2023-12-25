@@ -1,6 +1,7 @@
 #ifndef MM_TASK_TABLE_H_
 #define MM_TASK_TABLE_H_
 
+#include <libcaprese/cxx/id_map.h>
 #include <libcaprese/syscall.h>
 #include <map>
 
@@ -15,16 +16,9 @@ struct task_info {
 };
 
 class task_table {
-  struct id_cap_compare {
-    bool operator()(id_cap_t lhs, id_cap_t rhs) const {
-      intptr_t result = static_cast<intptr_t>(unwrap_sysret(sys_id_cap_compare(lhs, rhs)));
-      return result < 0;
-    }
-  };
-
-  uintptr_t                                     user_space_end;
-  int                                           max_page;
-  std::map<id_cap_t, task_info, id_cap_compare> table;
+  uintptr_t                  user_space_end;
+  int                        max_page;
+  caprese::id_map<task_info> table;
 
   static constexpr uintptr_t default_stack_available = MEGA_PAGE_SIZE;
   static constexpr uintptr_t default_total_available = static_cast<uintptr_t>(32) * GIGA_PAGE_SIZE;

@@ -111,7 +111,7 @@ namespace {
 
   id_cap_t attach_init_task(task_cap_t init_task_cap, page_table_cap_t root_page_table_cap, page_table_cap_t (&page_table_caps)[TERA_PAGE - 1], int max_page_level) {
     id_cap_t init_id_cap = unwrap_sysret(sys_id_cap_create());
-    int      result      = attach_task(init_id_cap, init_task_cap, root_page_table_cap, 0, 0, 0, true);
+    int      result      = attach_task(init_id_cap, init_task_cap, root_page_table_cap, MM_STACK_DEFAULT, MM_TOTAL_DEFAULT, 0, true);
     if (result != MM_CODE_S_OK) [[unlikely]] {
       return 0;
     }
@@ -131,7 +131,7 @@ namespace {
 
     __this_id_cap = unwrap_sysret(sys_id_cap_create());
 
-    int result = attach_task(__this_id_cap, __this_task_cap, page_table_caps[max_page_level], 0, 0, KILO_PAGE_SIZE, true);
+    int result = attach_task(__this_id_cap, __this_task_cap, page_table_caps[max_page_level], MM_STACK_DEFAULT, MM_TOTAL_DEFAULT, KILO_PAGE_SIZE, true);
 
     if (result != MM_CODE_S_OK) {
       abort();

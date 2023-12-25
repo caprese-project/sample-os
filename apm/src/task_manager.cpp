@@ -37,6 +37,12 @@ task::task(std::string name) noexcept: name(std::move(name)), tid(0) {
   tid = unwrap_sysret(sys_task_cap_tid(task_cap.get()));
 
   mm_id_cap = mm_attach(task_cap.get(), root_page_table_cap.get(), 0, 0, 4 * KILO_PAGE_SIZE);
+
+  ep_cap = mm_fetch_and_create_endpoint_object();
+}
+
+task::task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) noexcept: task_cap(task_cap), ep_cap(ep_cap), name(std::move(name)), tid(0) {
+  tid = unwrap_sysret(sys_task_cap_tid(task_cap));
 }
 
 task::task(task&& other) noexcept
@@ -44,6 +50,7 @@ task::task(task&& other) noexcept
       cap_space_cap(std::move(other.cap_space_cap)),
       root_page_table_cap(std::move(other.root_page_table_cap)),
       mm_id_cap(std::move(other.mm_id_cap)),
+      ep_cap(std::move(other.ep_cap)),
       name(std::move(other.name)),
       tid(other.tid) {
   for (size_t i = 0; i < std::size(cap_space_page_table_caps); ++i) {
@@ -57,6 +64,7 @@ task& task::operator=(task&& other) noexcept {
     cap_space_cap       = std::move(other.cap_space_cap);
     root_page_table_cap = std::move(other.root_page_table_cap);
     mm_id_cap           = std::move(other.mm_id_cap);
+    ep_cap              = std::move(other.ep_cap);
     name                = std::move(other.name);
     tid                 = other.tid;
 
@@ -72,12 +80,16 @@ task::~task() noexcept {
   // TODO: Release task's resources. (e.g. files)
 }
 
-const unique_cap& task::get_task_cap() const noexcept {
+const caprese::unique_cap& task::get_task_cap() const noexcept {
   return task_cap;
 }
 
-const unique_cap& task::get_mm_id_cap() const noexcept {
+const caprese::unique_cap& task::get_mm_id_cap() const noexcept {
   return mm_id_cap;
+}
+
+const caprese::unique_cap& task::get_ep_cap() const noexcept {
+  return ep_cap;
 }
 
 const std::string& task::get_name() const noexcept {
@@ -153,6 +165,10 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   id_cap_t dst_mm_id_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_mm_id_cap));
   task.set_register(REG_ARG_5, dst_mm_id_cap);
 
+  endpoint_cap_t copied_ep_cap = unwrap_sysret(sys_endpoint_cap_copy(task.get_ep_cap().get()));
+  endpoint_cap_t dst_ep_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_ep_cap));
+  task.set_register(REG_ARG_6, dst_ep_cap);
+
   tasks.emplace(std::move(name), std::move(task));
 
   if ((flags & APM_CREATE_FLAG_SUSPENDED) == 0) {
@@ -160,6 +176,20 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   }
 
   return true;
+}
+
+bool task_manager::attach(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
+  if (tasks.contains(name)) [[unlikely]] {
+    return false;
+  }
+
+  tasks.emplace(std::move(name), task(std::move(name), task_cap, ep_cap));
+
+  return true;
+}
+
+bool task_manager::exists(const std::string& name) const {
+  return tasks.contains(name);
 }
 
 task& task_manager::lookup(const std::string& name) {
@@ -172,6 +202,14 @@ const task& task_manager::lookup(const std::string& name) const {
 
 bool create_task(std::string name, std::reference_wrapper<std::istream> data, int flags) {
   return task_manager_instance.create(std::move(name), data, flags);
+}
+
+bool attach_task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
+  return task_manager_instance.attach(std::move(name), task_cap, ep_cap);
+}
+
+bool task_exists(const std::string& name) {
+  return task_manager_instance.exists(name);
 }
 
 task& lookup_task(const std::string& name) {

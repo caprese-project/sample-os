@@ -1,24 +1,15 @@
-#include <apm/ipc.h>
-#include <apm/ramfs.h>
 #include <apm/server.h>
-#include <apm/task_manager.h>
 #include <crt/global.h>
 #include <crt/heap.h>
-#include <libcaprese/cap.h>
-#include <libcaprese/syscall.h>
 #include <service/mm.h>
-#include <sstream>
 #include <stdlib.h>
 
-extern "C" {
-  extern const char _ramfs_start[];
-  extern const char _ramfs_end[];
-}
-
-int main() {
+void init() {
   endpoint_cap_t init_task_ep_cap = __init_context.__arg_regs[0];
 
-  assert(unwrap_sysret(sys_cap_type(init_task_ep_cap)) == CAP_ENDPOINT);
+  if (unwrap_sysret(sys_cap_type(init_task_ep_cap)) != CAP_ENDPOINT) [[unlikely]] {
+    abort();
+  }
 
   if (__heap_sbrk() == nullptr) [[unlikely]] {
     abort();
@@ -29,20 +20,15 @@ int main() {
 
   apm_ep_cap = mm_fetch_and_create_endpoint_object();
 
-  ramfs              fs(_ramfs_start, _ramfs_end);
-  std::istringstream stream = fs.open_file("dm");
-  if (!stream) {
-    abort();
-  }
+  message_buffer_t msg_buf;
+  msg_buf.cap_part_length  = 1;
+  msg_buf.data_part_length = 0;
+  msg_buf.data[0]          = unwrap_sysret(sys_endpoint_cap_copy(apm_ep_cap));
 
-  if (!create_task("dm", std::ref<std::istream>(stream), APM_CREATE_FLAG_SUSPENDED)) {
-    abort();
-  }
+  unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
+}
 
-  task& dm = lookup_task("dm");
-  dm.set_register(REG_ARG_0, dm.transfer_cap(init_task_ep_cap));
-  dm.resume();
-  dm.switch_task();
-
+int main() {
+  init();
   run();
 }

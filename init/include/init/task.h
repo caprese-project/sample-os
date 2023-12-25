@@ -14,6 +14,7 @@ typedef struct {
   page_table_cap_t page_table_caps[TERA_PAGE][8];
   page_table_cap_t cap_space_page_table_caps[TERA_PAGE];
   uintptr_t        heap_root;
+  id_cap_t         mm_id_cap;
 } task_context_t;
 
 typedef mem_cap_t (*mem_cap_fetcher_t)(size_t size, size_t alignment);

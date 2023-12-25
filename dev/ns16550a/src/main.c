@@ -31,10 +31,20 @@ int main() {
   while (1) {
     int ch = uart_getc();
     if (ch != -1) {
-      if (ch == '\r') {
-        ch = '\n';
+      switch (ch) {
+        case '\b':
+        case '\x7f':
+          uart_putc('\b');
+          uart_putc(' ');
+          uart_putc('\b');
+          break;
+        case '\r':
+          uart_putc('\n');
+          break;
+        default:
+          uart_putc(ch);
+          break;
       }
-      uart_putc(ch);
     }
   }
 

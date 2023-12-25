@@ -25,4 +25,8 @@
 #define MM_VMAP_FLAG_EXEC  (1 << 2)
 #define MM_VMAP_FLAG_VPCAP (1 << 3)
 
+#define MM_STACK_DEFAULT 0
+#define MM_TOTAL_DEFAULT 0
+#define MM_VA_RAMDOM     0
+
 #endif // MM_IPC_H_

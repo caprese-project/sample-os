@@ -3,13 +3,15 @@
 
 #include <apm/ipc.h>
 #include <libcaprese/cap.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
-  task_cap_t apm_create(const char* path, const char* app_name, int flags);
-  task_cap_t apm_lookup(const char* app_name);
+  task_cap_t     apm_create(const char* path, const char* app_name, int flags);
+  endpoint_cap_t apm_lookup(const char* app_name);
+  bool           apm_attach(task_cap_t task_cap, endpoint_cap_t ep_cap, const char* app_name);
 
 #ifdef __cplusplus
 } // extern "C"

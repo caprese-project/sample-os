@@ -22,6 +22,7 @@ static void __heap_split(__heap_block_header_t* header, size_t size) {
     new_header->next                  = header->next;
     new_header->size                  = header->size - size - sizeof(__heap_block_header_t);
     header->next                      = new_header;
+    header->size                      = size;
   }
 }
 

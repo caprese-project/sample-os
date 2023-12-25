@@ -1,5 +1,4 @@
-#include <apm_elf_size.h>
-#include <mm_elf_size.h>
+#include <ramfs_size.h>
 
 OUTPUT_ARCH( "riscv" )
 ENTRY( _start )
@@ -51,21 +50,13 @@ SECTIONS
     __fini_array_end = .;
   }
 
-  . = ALIGN(16);
+  . = ALIGN(0x1000);
 
-  .apm_elf :
+  .ramfs :
   {
-    _apm_elf_start = .;
-    KEEP(*(.apm_elf))
-    . += CONFIG_APM_ELF_SIZE;
-    _apm_elf_end = .;
-  }
-
-  .mm_elf :
-  {
-    _mm_elf_start = .;
-    KEEP(*(.mm_elf))
-    . += CONFIG_MM_ELF_SIZE;
-    _mm_elf_end = .;
+    _ramfs_start = .;
+    KEEP(*(.ramfs))
+    . += CONFIG_RAMFS_SIZE;
+    _ramfs_end = .;
   }
 }

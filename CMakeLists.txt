@@ -48,11 +48,20 @@ set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/ramfs.cmake)
 
-add_subdirectory(init)
+init_ramfs()
+
 add_subdirectory(mm)
 add_subdirectory(apm)
 add_subdirectory(dm)
 add_subdirectory(dev)
+add_subdirectory(fs)
+add_subdirectory(ramfs)
+add_subdirectory(cons)
+add_subdirectory(shell)
+
+make_ramfs()
+
+add_subdirectory(init)
 
 add_subdirectory(libc)
 

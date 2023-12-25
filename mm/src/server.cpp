@@ -10,7 +10,7 @@ namespace {
   void attach(message_buffer_t* msg_buf) {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_ATTACH);
 
-    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
+    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 4) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -57,7 +57,7 @@ namespace {
       return;
     }
 
-    id_cap_t id_cap = msg_buf->data[msg_buf->cap_part_length];
+    id_cap_t id_cap = msg_buf->data[0];
 
     if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
       msg_buf->data_part_length               = 1;

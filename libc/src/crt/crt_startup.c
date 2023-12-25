@@ -2,6 +2,7 @@
 #include <crt/heap.h>
 #include <internal/branch.h>
 #include <libcaprese/cap.h>
+#include <service/apm.h>
 #include <stdlib.h>
 
 void __crt_cleanup() {
@@ -15,6 +16,7 @@ int __crt_startup() {
   __apm_ep_cap    = __init_context.__arg_regs[3];
   __mm_ep_cap     = __init_context.__arg_regs[4];
   __mm_id_cap     = __init_context.__arg_regs[5];
+  __this_ep_cap   = __init_context.__arg_regs[6];
 
   __if_unlikely (atexit(__crt_cleanup) != 0) {
     return 1;
@@ -27,6 +29,8 @@ int __crt_startup() {
     }
     __brk_start = (uintptr_t)heap_start;
     __heap_init();
+
+    __fs_ep_cap = apm_lookup("fs");
   }
 
   for (void (**constructor)() = __init_array_start; constructor != __init_array_end; ++constructor) {

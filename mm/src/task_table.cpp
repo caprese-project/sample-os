@@ -37,11 +37,11 @@ int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_
     return MM_CODE_E_ALREADY_ATTACHED;
   }
 
-  if (stack_available == 0) {
+  if (stack_available == MM_STACK_DEFAULT) {
     stack_available = default_stack_available;
   }
 
-  if (total_available == 0) {
+  if (total_available == MM_TOTAL_DEFAULT) {
     total_available = default_total_available;
   }
 
@@ -104,7 +104,7 @@ int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, uintp
 
   task_info& info = table.at(id);
 
-  if (va_base == 0) {
+  if (va_base == MM_VA_RAMDOM) {
     va_base = random_va(id, level);
     if (va_base == 0) [[unlikely]] {
       return MM_CODE_E_OVERFLOW;
@@ -150,7 +150,7 @@ int task_table::vremap(id_cap_t src_id, id_cap_t dst_id, int flags, uintptr_t sr
 
   int level = static_cast<int>(unwrap_sysret(sys_virt_page_cap_level(src_info.virt_page_caps.at(src_va_base))));
 
-  if (dst_va_base == 0) {
+  if (dst_va_base == MM_VA_RAMDOM) {
     dst_va_base = random_va(dst_id, level);
     if (dst_va_base == 0) [[unlikely]] {
       return MM_CODE_E_OVERFLOW;
@@ -185,7 +185,7 @@ int task_table::vpmap(id_cap_t id, int flags, virt_page_cap_t virt_page_cap, uin
 
   task_info& info = table.at(id);
 
-  if (va_base == 0) {
+  if (va_base == MM_VA_RAMDOM) {
     va_base = random_va(id, level);
     if (va_base == 0) [[unlikely]] {
       return MM_CODE_E_OVERFLOW;
@@ -259,7 +259,7 @@ int task_table::vpremap(id_cap_t src_id, id_cap_t dst_id, int flags, virt_page_c
   task_info& src_info = table.at(src_id);
   task_info& dst_info = table.at(dst_id);
 
-  if (va_base == 0) {
+  if (va_base == MM_VA_RAMDOM) {
     va_base = random_va(dst_id, level);
     if (va_base == 0) [[unlikely]] {
       return MM_CODE_E_OVERFLOW;

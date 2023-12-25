@@ -48,12 +48,25 @@ bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap) {
   if (task_mem_cap == 0) {
     return false;
   }
+
   ctx->task_cap = unwrap_sysret(sys_mem_cap_create_task_object(task_mem_cap,
                                                                ctx->cap_space_cap,
                                                                ctx->page_table_caps[max_page][0],
                                                                ctx->cap_space_page_table_caps[0],
                                                                ctx->cap_space_page_table_caps[1],
                                                                ctx->cap_space_page_table_caps[2]));
+
+  task_cap_t copy_task = unwrap_sysret(sys_task_cap_copy(ctx->task_cap));
+  task_cap_t dst_task  = unwrap_sysret(sys_task_cap_transfer_cap(ctx->task_cap, copy_task));
+
+  endpoint_cap_t dst_apm_ep = 0;
+  if (__apm_ep_cap != 0) {
+    endpoint_cap_t copy_apm_ep = unwrap_sysret(sys_endpoint_cap_copy(__apm_ep_cap));
+    dst_apm_ep                 = unwrap_sysret(sys_task_cap_transfer_cap(ctx->task_cap, copy_apm_ep));
+  }
+
+  unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_ARG_2, dst_task));   // __this_task_cap
+  unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_ARG_3, dst_apm_ep)); // __apm_task_cap
 
   return true;
 }
@@ -184,12 +197,6 @@ bool load_elf(task_context_t* ctx, const void* elf_data, size_t elf_size, vmappe
   ctx->heap_root = (ctx->heap_root + MEGA_PAGE_SIZE - 1) / MEGA_PAGE_SIZE * MEGA_PAGE_SIZE;
 
   unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_PROGRAM_COUNTER, header->entry_position));
-
-  task_cap_t copy_task = unwrap_sysret(sys_task_cap_copy(ctx->task_cap));
-  task_cap_t dst_task  = unwrap_sysret(sys_task_cap_transfer_cap(ctx->task_cap, copy_task));
-
-  unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_ARG_2, dst_task)); // __this_task_cap
-  unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_ARG_3, 0));        // __apm_task_cap
 
   return true;
 }

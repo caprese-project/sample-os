@@ -5,12 +5,8 @@
 #include <service/mm.h>
 
 int main() {
-  endpoint_cap_t init_task_ep_cap = __init_context.__arg_regs[0];
-
-  assert(unwrap_sysret(sys_cap_type(init_task_ep_cap)) == CAP_ENDPOINT);
-
   message_buffer_t msg_buf;
-  unwrap_sysret(sys_endpoint_cap_receive(init_task_ep_cap, &msg_buf));
+  unwrap_sysret(sys_endpoint_cap_receive(__this_ep_cap, &msg_buf));
 
   if (msg_buf.data_part_length != 1) [[unlikely]] {
     return 1;
@@ -48,6 +44,10 @@ int main() {
   if (!launch_device(stdout_path)) [[unlikely]] {
     return 1;
   }
+
+  msg_buf.cap_part_length  = 0;
+  msg_buf.data_part_length = 0;
+  unwrap_sysret(sys_endpoint_cap_reply(__this_ep_cap, &msg_buf));
 
   while (true) {
     sys_system_yield();

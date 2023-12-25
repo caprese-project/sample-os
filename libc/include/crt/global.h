@@ -25,6 +25,8 @@ extern "C" {
   extern endpoint_cap_t __apm_ep_cap;
   extern endpoint_cap_t __mm_ep_cap;
   extern id_cap_t       __mm_id_cap;
+  extern endpoint_cap_t __this_ep_cap;
+  extern endpoint_cap_t __fs_ep_cap;
   extern uintptr_t      __brk_start;
   extern uintptr_t      __brk_pos;
 
