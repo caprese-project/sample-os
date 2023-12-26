@@ -1,3 +1,4 @@
+#include "server.h"
 #include "uart.h"
 
 #include <crt/global.h>
@@ -6,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main() {
-  endpoint_cap_t dm_ep_cap = __init_context.__arg_regs[6];
+int main(void) {
+  endpoint_cap_t dm_ep_cap = __init_context.__arg_regs[0];
   if (unwrap_sysret(sys_cap_type(dm_ep_cap)) != CAP_ENDPOINT) {
     abort();
   }
@@ -23,34 +24,7 @@ int main() {
 
   init_uart(base_addr);
 
-  char* msg = "Hello, world!\n";
-  for (size_t i = 0; i < strlen(msg); ++i) {
-    uart_putc(msg[i]);
-  }
-
-  while (1) {
-    int ch = uart_getc();
-    if (ch != -1) {
-      switch (ch) {
-        case '\b':
-        case '\x7f':
-          uart_putc('\b');
-          uart_putc(' ');
-          uart_putc('\b');
-          break;
-        case '\r':
-          uart_putc('\n');
-          break;
-        default:
-          uart_putc(ch);
-          break;
-      }
-    }
-  }
-
-  while (1) {
-    sys_system_yield();
-  }
+  run();
 
   return 0;
 }

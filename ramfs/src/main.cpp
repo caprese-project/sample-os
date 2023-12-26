@@ -12,7 +12,7 @@ int main() {
     return 1;
   }
 
-  atexit([]() { fs_unmount(ramfs_id_cap); });
+  atexit([] { fs_unmount(ramfs_id_cap); });
 
   run(ramfs_va_base);
 }

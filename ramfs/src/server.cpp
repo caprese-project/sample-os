@@ -88,6 +88,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_OPEN);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -97,6 +98,7 @@ namespace {
     auto [data, size] = find_file(path);
 
     if (data == nullptr) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_NO_SUCH_FILE;
       return;
@@ -115,6 +117,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_CLOSE);
 
     if (msg_buf->cap_part_length != 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -122,12 +125,14 @@ namespace {
 
     id_cap_t fd = msg_buf->data[1];
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
     }
 
     if (!file_table.contains(fd)) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -137,6 +142,7 @@ namespace {
 
     sys_cap_destroy(fd);
 
+    msg_buf->cap_part_length                = 0;
     msg_buf->data_part_length               = 1;
     msg_buf->data[msg_buf->cap_part_length] = FS_CODE_S_OK;
   }
@@ -145,6 +151,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_READ);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -153,13 +160,14 @@ namespace {
     id_cap_t fd = msg_buf->data[1];
 
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
     }
 
     if (!file_table.contains(fd)) [[unlikely]] {
-      sys_cap_destroy(fd);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -183,6 +191,7 @@ namespace {
       msg_buf->data[0] = FS_CODE_S_OK;
     }
 
+    msg_buf->cap_part_length  = 0;
     msg_buf->data_part_length = 2 + (msg_buf->data[1] + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
 
     sys_cap_destroy(fd);
@@ -192,6 +201,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_SEEK);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -200,13 +210,14 @@ namespace {
     id_cap_t fd = msg_buf->data[1];
 
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
     }
 
     if (!file_table.contains(fd)) [[unlikely]] {
-      sys_cap_destroy(fd);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -239,6 +250,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_TELL);
 
     if (msg_buf->cap_part_length != 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
     }
@@ -246,12 +258,13 @@ namespace {
     id_cap_t fd = msg_buf->data[1];
 
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
     }
 
     if (!file_table.contains(fd)) [[unlikely]] {
-      sys_cap_destroy(fd);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
     }
@@ -286,6 +299,7 @@ namespace {
 
   void proc_msg(message_buffer_t* msg_buf) {
     if (msg_buf->cap_part_length == 0 || msg_buf->data_part_length == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -293,13 +307,14 @@ namespace {
 
     id_cap_t id = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(id)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
     }
 
     if (unwrap_sysret(sys_id_cap_compare(id, ramfs_id_cap)) != 0) [[unlikely]] {
-      sys_cap_destroy(id);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -308,14 +323,14 @@ namespace {
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
     if (msg_type < FS_MSG_TYPE_OPEN || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
-      sys_cap_destroy(id);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_UNSUPPORTED;
       return;
     }
 
     if (table[msg_type] == nullptr) [[unlikely]] {
-      sys_cap_destroy(id);
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_UNSUPPORTED;
       return;
@@ -323,7 +338,9 @@ namespace {
 
     table[msg_type](msg_buf);
 
-    sys_cap_destroy(id);
+    if (msg_buf->data[msg_buf->cap_part_length] == FS_CODE_S_OK) {
+      sys_cap_destroy(id);
+    }
   }
 } // namespace
 

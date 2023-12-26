@@ -45,6 +45,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libcaprese)
 
 set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(DEV_INTERFACE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dev/if)
 
 include(cmake/ramfs.cmake)
 

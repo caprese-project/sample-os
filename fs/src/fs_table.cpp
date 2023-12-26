@@ -61,6 +61,10 @@ std::pair<decltype(fs_table)::iterator, std::string> find_fs(const std::string& 
   }
   --iter;
 
+  if (iter == fs_table_by_path.end()) {
+    return std::pair<decltype(fs_table)::iterator, std::string>(fs_table.end(), "");
+  }
+
   auto res_iter = fs_table.find(iter->second);
   if (res_iter == fs_table.end()) {
     return std::pair<decltype(fs_table)::iterator, std::string>(fs_table.end(), "");
@@ -216,13 +220,16 @@ int write_fs(id_cap_t fd, const void* buf, size_t size, size_t* act_size) {
   const char*      ptr          = reinterpret_cast<const char*>(buf);
 
   while (size > written_size) {
-    msg_buf.cap_part_length  = 1;
-    msg_buf.data[0]          = fd;
-    msg_buf.data_part_length = 2 + (size - written_size + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
-    msg_buf.data[1]          = FS_MSG_TYPE_WRITE;
-    msg_buf.data[2]          = size - written_size;
+    size_t len = std::min(size - written_size, (std::size(msg_buf.data) - 4) * sizeof(uintptr_t));
 
-    memcpy(&msg_buf.data[3], ptr + written_size, size - written_size);
+    msg_buf.cap_part_length  = 2;
+    msg_buf.data[0]          = unwrap_sysret(sys_id_cap_copy(fs_info.id_cap));
+    msg_buf.data[1]          = msg_buf_delegate(fd);
+    msg_buf.data_part_length = 2 + (len + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
+    msg_buf.data[2]          = FS_MSG_TYPE_WRITE;
+    msg_buf.data[3]          = len;
+
+    memcpy(&msg_buf.data[4], ptr + written_size, len);
 
     if (sysret_failed(sys_endpoint_cap_call(fs_info.ep_cap, &msg_buf))) [[unlikely]] {
       errno = FS_CODE_E_FAILURE;

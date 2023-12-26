@@ -4,6 +4,7 @@
 #include <init/util.h>
 #include <internal/branch.h>
 #include <service/apm.h>
+#include <service/fs.h>
 #include <service/mm.h>
 #include <stdlib.h>
 #include <string.h>
@@ -337,6 +338,10 @@ void launch_ramfs(task_context_t* ctx) {
 
   unwrap_sysret(sys_task_cap_resume(ctx->task_cap));
   unwrap_sysret(sys_task_cap_switch(ctx->task_cap));
+
+  while (!fs_mounted("/init")) {
+    unwrap_sysret(sys_system_yield());
+  }
 }
 
 void launch_dm(task_context_t* ctx) {
@@ -382,6 +387,17 @@ void launch_dm(task_context_t* ctx) {
   unwrap_sysret(sys_endpoint_cap_call(ep_cap, &msg_buf));
 
   sys_cap_destroy(ep_cap);
+}
+
+void launch_cons(task_context_t* ctx) {
+  ctx->task_cap = apm_create("/init/cons", "cons", APM_CREATE_FLAG_DEFAULT);
+  __if_unlikely (ctx->task_cap == 0) {
+    abort();
+  }
+
+  while (!fs_mounted("/cons")) {
+    unwrap_sysret(sys_system_yield());
+  }
 }
 
 void launch_shell(task_context_t* ctx) {

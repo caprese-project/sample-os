@@ -18,6 +18,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == APM_MSG_TYPE_CREATE);
 
     if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -30,6 +31,7 @@ namespace {
 
     if (__fs_ep_cap == 0) [[unlikely]] {
       if (!task_exists("fs")) {
+        msg_buf_destroy(msg_buf);
         msg_buf->data_part_length               = 1;
         msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_FILE;
         return;
@@ -42,6 +44,7 @@ namespace {
     id_cap_t fd = fs_open(path.c_str());
 
     if (fd == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_FILE;
       return;
@@ -54,6 +57,7 @@ namespace {
       while (true) {
         size_t read_size = fs_read(fd, buf.get(), 0x1000);
         if (read_size == static_cast<size_t>(-1)) [[unlikely]] {
+          msg_buf_destroy(msg_buf);
           msg_buf->data_part_length               = 1;
           msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
           return;
@@ -70,12 +74,13 @@ namespace {
 
     std::istringstream stream(data, std::ios_base::binary);
     if (!create_task(name, std::ref<std::istream>(stream), flags)) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
       return;
     }
 
-    const task& task = lookup_task(name);
+     const task& task = lookup_task(name);
 
     msg_buf->cap_part_length                = 1;
     msg_buf->data[0]                        = unwrap_sysret(sys_task_cap_copy(task.get_task_cap().get()));
@@ -87,6 +92,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == APM_MSG_TYPE_LOOKUP);
 
     if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -96,6 +102,7 @@ namespace {
     std::string name      = str_start;
 
     if (!task_exists(name)) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_NO_SUCH_TASK;
       return;
@@ -113,6 +120,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == APM_MSG_TYPE_ATTACH);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -121,6 +129,7 @@ namespace {
     task_cap_t task_cap = msg_buf->data[0];
 
     if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -129,6 +138,7 @@ namespace {
     endpoint_cap_t ep_cap = msg_buf->data[1];
 
     if (unwrap_sysret(sys_cap_type(ep_cap)) != CAP_ENDPOINT) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -138,6 +148,7 @@ namespace {
     std::string name      = str_start;
 
     if (!attach_task(name, task_cap, ep_cap)) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_FAILURE;
       return;
@@ -163,6 +174,7 @@ namespace {
     assert(msg_buf != nullptr);
 
     if (msg_buf->data_part_length == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
       return;
@@ -171,6 +183,7 @@ namespace {
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
     if (msg_type < APM_MSG_TYPE_CREATE || msg_type > APM_MSG_TYPE_ATTACH) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = APM_CODE_E_ILL_ARGS;
     } else {

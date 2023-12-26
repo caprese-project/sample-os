@@ -7,6 +7,7 @@ static task_context_t apm_ctx;
 static task_context_t fs_ctx;
 static task_context_t ramfs_ctx;
 static task_context_t dm_ctx;
+static task_context_t cons_ctx;
 static task_context_t shell_ctx;
 
 int main(void) {
@@ -18,12 +19,8 @@ int main(void) {
   launch_apm(&apm_ctx);
   launch_fs(&fs_ctx);
   launch_ramfs(&ramfs_ctx);
-
-  while (!fs_mounted("/init")) {
-    unwrap_sysret(sys_system_yield());
-  }
-
   launch_dm(&dm_ctx);
+  launch_cons(&cons_ctx);
   launch_shell(&shell_ctx);
 
   while (true) {

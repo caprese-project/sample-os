@@ -80,7 +80,7 @@ bool launch_device(const std::string& full_path) {
 
   endpoint_cap_t copied_ep_cap = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
   endpoint_cap_t dst_ep_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task_cap, copied_ep_cap));
-  unwrap_sysret(sys_task_cap_set_reg(task_cap, REG_ARG_6, dst_ep_cap));
+  unwrap_sysret(sys_task_cap_set_reg(task_cap, REG_ARG_0, dst_ep_cap));
   sys_task_cap_resume(task_cap);
 
   unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, &msg_buf));

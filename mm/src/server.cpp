@@ -11,6 +11,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_ATTACH);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 4) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -23,6 +24,7 @@ namespace {
     size_t           stack_commit        = msg_buf->data[msg_buf->cap_part_length + 3];
 
     if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK || unwrap_sysret(sys_cap_type(root_page_table_cap)) != CAP_PAGE_TABLE) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -52,6 +54,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_DETACH);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 1) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -60,6 +63,7 @@ namespace {
     id_cap_t id_cap = msg_buf->data[0];
 
     if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -76,6 +80,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VMAP);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 4) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -87,6 +92,7 @@ namespace {
     uintptr_t va_base = msg_buf->data[msg_buf->cap_part_length + 3];
 
     if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -114,6 +120,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VREMAP);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 4) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -126,6 +133,7 @@ namespace {
     uintptr_t dst_va_base = msg_buf->data[msg_buf->cap_part_length + 3];
 
     if (unwrap_sysret(sys_cap_type(src_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(dst_id_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -154,6 +162,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VPMAP);
 
     if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -165,6 +174,7 @@ namespace {
     uintptr_t       va_base       = msg_buf->data[msg_buf->cap_part_length + 2];
 
     if (unwrap_sysret(sys_cap_type(id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(virt_page_cap)) != CAP_VIRT_PAGE) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -192,6 +202,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_VPREMAP);
 
     if (msg_buf->cap_part_length != 3 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -204,6 +215,7 @@ namespace {
     uintptr_t       va_base       = msg_buf->data[msg_buf->cap_part_length + 2];
 
     if (unwrap_sysret(sys_cap_type(src_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(dst_id_cap)) != CAP_ID || unwrap_sysret(sys_cap_type(virt_page_cap)) != CAP_VIRT_PAGE) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -232,6 +244,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_FETCH);
 
     if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 3) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -242,6 +255,7 @@ namespace {
 
     mem_cap_t mem_cap = fetch_mem_cap(size, alignment);
     if (mem_cap == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_FAILURE;
       return;
@@ -257,6 +271,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_REVOKE);
 
     if (msg_buf->cap_part_length != 1) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -264,6 +279,7 @@ namespace {
 
     mem_cap_t mem_cap = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(mem_cap)) != CAP_MEM) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -280,6 +296,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == MM_MSG_TYPE_INFO);
 
     if (msg_buf->cap_part_length != 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -311,6 +328,7 @@ namespace {
     assert(msg_buf != NULL);
 
     if (msg_buf->data_part_length == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
       return;
@@ -319,6 +337,7 @@ namespace {
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
     if (msg_type < MM_MSG_TYPE_ATTACH || msg_type > MM_MSG_TYPE_INFO) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = MM_CODE_E_ILL_ARGS;
     } else {

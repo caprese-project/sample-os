@@ -18,6 +18,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_MOUNT);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -25,6 +26,7 @@ namespace {
 
     endpoint_cap_t ep_cap = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(ep_cap)) != CAP_ENDPOINT) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -34,6 +36,7 @@ namespace {
     std::string path(c_path, strnlen(c_path, sizeof(uintptr_t) * (msg_buf->data_part_length - 1)));
 
     if (path.empty()) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -64,6 +67,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_UNMOUNT);
 
     if (msg_buf->cap_part_length != 1) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -89,6 +93,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_MOUNTED);
 
     if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -98,6 +103,7 @@ namespace {
     std::string path(c_path, strnlen(c_path, sizeof(uintptr_t) * (msg_buf->data_part_length - 1)));
 
     if (path.empty()) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -119,6 +125,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_OPEN);
 
     if (msg_buf->cap_part_length != 0 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -128,6 +135,7 @@ namespace {
     std::string path(c_path, strnlen(c_path, sizeof(uintptr_t) * (msg_buf->data_part_length - 1)));
 
     if (path.empty()) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -136,6 +144,7 @@ namespace {
     id_cap_t fd_cap = open_fs(path);
 
     if (fd_cap == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = errno;
     } else {
@@ -150,6 +159,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_CLOSE);
 
     if (msg_buf->cap_part_length != 1) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -157,6 +167,7 @@ namespace {
 
     id_cap_t fd_cap = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(fd_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -166,6 +177,7 @@ namespace {
 
     sys_cap_destroy(fd_cap);
 
+    msg_buf->cap_part_length = 0;
     if (result != FS_CODE_S_OK) [[unlikely]] {
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = result;
@@ -179,6 +191,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_READ);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -186,6 +199,7 @@ namespace {
 
     id_cap_t fd_cap = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(fd_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -193,6 +207,7 @@ namespace {
 
     size_t size = msg_buf->data[msg_buf->cap_part_length + 1];
     if (size > max_size) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -201,13 +216,11 @@ namespace {
     int result = read_fs(fd_cap, &msg_buf->data[2], size, &msg_buf->data[1]);
 
     sys_cap_destroy(fd_cap);
-
+    msg_buf->cap_part_length = 0;
     if (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) [[unlikely]] {
-      msg_buf->cap_part_length                = 0;
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = result;
     } else {
-      msg_buf->cap_part_length  = 0;
       msg_buf->data_part_length = 2 + (msg_buf->data[1] + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
       msg_buf->data[0]          = result;
     }
@@ -217,6 +230,7 @@ namespace {
     assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_WRITE);
 
     if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -224,6 +238,7 @@ namespace {
 
     id_cap_t fd_cap = msg_buf->data[0];
     if (unwrap_sysret(sys_cap_type(fd_cap)) != CAP_ID) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -231,21 +246,20 @@ namespace {
 
     size_t size = msg_buf->data[msg_buf->cap_part_length + 1];
     if (size > max_size) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
     }
 
-    int result = write_fs(fd_cap, &msg_buf->data[2], size, &msg_buf->data[1]);
+    int result = write_fs(fd_cap, &msg_buf->data[msg_buf->cap_part_length + 2], size, &msg_buf->data[1]);
 
     sys_cap_destroy(fd_cap);
-
+    msg_buf->cap_part_length = 0;
     if (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) [[unlikely]] {
-      msg_buf->cap_part_length                = 0;
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = result;
     } else {
-      msg_buf->cap_part_length  = 0;
       msg_buf->data_part_length = 2;
       msg_buf->data[0]          = result;
     }
@@ -290,6 +304,7 @@ namespace {
     assert(msg_buf != nullptr);
 
     if (msg_buf->data_part_length == 0) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
       return;
@@ -298,6 +313,7 @@ namespace {
     uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
 
     if (msg_type < FS_MSG_TYPE_MOUNT || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
+      msg_buf_destroy(msg_buf);
       msg_buf->data_part_length               = 1;
       msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
     } else {

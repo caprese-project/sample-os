@@ -5,13 +5,14 @@ add_executable(ns16550a)
 target_sources(
   ns16550a PRIVATE
   src/main.c
+  src/server.c
   src/uart.c
 )
 
 target_compile_features(ns16550a PRIVATE c_std_17)
 target_compile_options(ns16550a PRIVATE ${CONFIG_COMPILE_OPTIONS})
 
-target_include_directories(ns16550a PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(ns16550a PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${DEV_INTERFACE_DIR})
 
 target_link_libraries(ns16550a PRIVATE libc)
 

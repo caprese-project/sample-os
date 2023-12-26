@@ -8,6 +8,7 @@ void launch_apm(task_context_t* ctx);
 void launch_fs(task_context_t* ctx);
 void launch_ramfs(task_context_t* ctx);
 void launch_dm(task_context_t* ctx);
+void launch_cons(task_context_t* ctx);
 void launch_shell(task_context_t* ctx);
 
 #endif // INIT_LAUNCH_H_
