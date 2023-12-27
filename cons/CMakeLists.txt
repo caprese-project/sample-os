@@ -23,7 +23,6 @@ target_link_options(
   PRIVATE
   -nostdlib
   -z max-page-size=4096
-  -T ${ROOT_DIR}/tmp/linker.ld
 )
 
 add_ramfs(cons)
