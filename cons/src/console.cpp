@@ -137,7 +137,7 @@ ssize_t console::cooked_read(endpoint_cap_t ep_cap, char* dst, size_t max_size) 
               this->puts(ep_cap, this->buffer.c_str() + this->cursor_pos, this->buffer.size() - this->cursor_pos);
 
               std::string cursor_move = "\e[";
-              cursor_move += std::to_string(this->buffer.size() - this->cursor_pos + 1);
+              cursor_move += std::to_string(this->buffer.size() - this->cursor_pos);
               cursor_move += "D";
               this->puts(ep_cap, cursor_move.c_str(), cursor_move.size());
 
