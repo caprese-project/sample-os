@@ -52,12 +52,16 @@ namespace {
     return true;
   }
 
-  mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment, const message_buffer_t& msg_buf) {
+  mem_cap_t early_fetch_mem_cap(size_t size, size_t alignment, message_t* msg) {
     cap_t  mem_cap      = 0;
     size_t mem_cap_size = 0;
 
-    for (size_t i = 0; i < msg_buf.cap_part_length; ++i) {
-      cap_t      cap  = msg_buf.data[i];
+    for (size_t i = 0, msg_size = get_message_size(msg); i < msg_size; ++i) {
+      if (!is_ipc_cap(msg, i)) {
+        continue;
+      }
+
+      cap_t      cap  = get_ipc_cap(msg, i);
       cap_type_t type = static_cast<cap_type_t>(unwrap_sysret(sys_cap_type(cap)));
       if (type != CAP_MEM) {
         continue;
@@ -91,8 +95,8 @@ namespace {
     return mem_cap;
   }
 
-  bool map_first_internal_heap(const page_table_cap_t (&page_table_caps)[TERA_PAGE], const message_buffer_t& msg_buf) {
-    mem_cap_t page_mem_cap = early_fetch_mem_cap(MEGA_PAGE_SIZE, MEGA_PAGE_SIZE, msg_buf);
+  bool map_first_internal_heap(const page_table_cap_t (&page_table_caps)[TERA_PAGE], message_t* msg) {
+    mem_cap_t page_mem_cap = early_fetch_mem_cap(MEGA_PAGE_SIZE, MEGA_PAGE_SIZE, msg);
     if (page_mem_cap == 0) {
       return false;
     }
@@ -159,6 +163,57 @@ namespace {
       abort();
     }
   }
+
+  endpoint_cap_t handshake(endpoint_cap_t init_task_ep_cap, page_table_cap_t (&page_table_caps)[TERA_PAGE], int max_page_level) {
+    char       msg_buf[0x400];
+    message_t* msg               = reinterpret_cast<message_t*>(msg_buf);
+    msg->header.payload_length   = 0;
+    msg->header.payload_capacity = sizeof(msg_buf) - sizeof(message_header);
+
+    unwrap_sysret(sys_endpoint_cap_receive(init_task_ep_cap, msg));
+
+    task_cap_t       init_task_cap                            = move_ipc_cap(msg, 0);
+    page_table_cap_t init_task_root_page_table_cap            = move_ipc_cap(msg, 1);
+    page_table_cap_t init_task_page_table_caps[TERA_PAGE - 1] = {};
+    for (int i = 0; i < max_page_level; ++i) {
+      init_task_page_table_caps[i] = move_ipc_cap(msg, 2 + i);
+    }
+
+    if (!map_first_internal_heap(page_table_caps, msg)) {
+      return 0;
+    }
+
+    for (size_t i = 2 + max_page_level; is_ipc_cap(msg, i); ++i) {
+      register_mem_cap(move_ipc_cap(msg, i));
+    }
+
+    attach_self(page_table_caps, max_page_level);
+
+    id_cap_t init_id_cap = attach_init_task(init_task_cap, init_task_root_page_table_cap, init_task_page_table_caps, max_page_level);
+    if (init_id_cap == 0) {
+      return 0;
+    }
+    id_cap_t init_id_cap_copy = unwrap_sysret(sys_id_cap_copy(init_id_cap));
+
+    const size_t ep_size    = unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT));
+    const size_t ep_align   = unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT));
+    mem_cap_t    ep_mem_cap = fetch_mem_cap(ep_size, ep_align);
+    if (ep_mem_cap == 0) {
+      return 0;
+    }
+    endpoint_cap_t ep_cap      = unwrap_sysret(sys_mem_cap_create_endpoint_object(ep_mem_cap));
+    endpoint_cap_t ep_cap_copy = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
+
+    msg->header.data_type_map[0] = 0;
+    msg->header.data_type_map[1] = 0;
+
+    set_ipc_cap(msg, 0, ep_cap_copy, false);
+    set_ipc_cap(msg, 1, init_id_cap_copy, false);
+
+    unwrap_sysret(sys_endpoint_cap_reply(init_task_ep_cap, msg));
+
+    return ep_cap;
+  }
 } // namespace
 
 int main() {
@@ -176,50 +231,15 @@ int main() {
 
   page_table_cap_t page_table_caps[TERA_PAGE] = {};
   int              max_page_level             = get_max_page();
-  if (!load_page_table_caps(page_table_caps, max_page_level, user_space_end)) {
+  if (!load_page_table_caps(page_table_caps, max_page_level, user_space_end)) [[unlikely]] {
     return 1;
   }
 
-  message_buffer_t msg_buf;
-  unwrap_sysret(sys_endpoint_cap_receive(init_task_ep_cap, &msg_buf));
+  endpoint_cap_t ep_cap = handshake(init_task_ep_cap, page_table_caps, max_page_level);
 
-  task_cap_t       init_task_cap                            = msg_buf.data[0];
-  page_table_cap_t init_task_root_page_table_cap            = msg_buf.data[1];
-  page_table_cap_t init_task_page_table_caps[TERA_PAGE - 1] = {};
-  for (int i = 0; i < max_page_level; ++i) {
-    init_task_page_table_caps[i] = msg_buf.data[2 + i];
-  }
-
-  if (!map_first_internal_heap(page_table_caps, msg_buf)) {
+  if (ep_cap == 0) [[unlikely]] {
     return 1;
   }
-
-  for (size_t i = 2 + max_page_level; i < msg_buf.cap_part_length; ++i) {
-    register_mem_cap(msg_buf.data[i]);
-  }
-
-  attach_self(page_table_caps, max_page_level);
-
-  id_cap_t init_id_cap = attach_init_task(init_task_cap, init_task_root_page_table_cap, init_task_page_table_caps, max_page_level);
-  if (init_id_cap == 0) {
-    return 1;
-  }
-  id_cap_t init_id_cap_copy = unwrap_sysret(sys_id_cap_copy(init_id_cap));
-
-  const size_t ep_size    = unwrap_sysret(sys_system_cap_size(CAP_ENDPOINT));
-  const size_t ep_align   = unwrap_sysret(sys_system_cap_align(CAP_ENDPOINT));
-  mem_cap_t    ep_mem_cap = fetch_mem_cap(ep_size, ep_align);
-  if (ep_mem_cap == 0) {
-    return 1;
-  }
-  endpoint_cap_t ep_cap      = unwrap_sysret(sys_mem_cap_create_endpoint_object(ep_mem_cap));
-  endpoint_cap_t ep_cap_copy = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
-
-  msg_buf.cap_part_length  = 2;
-  msg_buf.data_part_length = 0;
-  msg_buf.data[0]          = msg_buf_transfer(ep_cap_copy);
-  msg_buf.data[1]          = msg_buf_transfer(init_id_cap_copy);
-  unwrap_sysret(sys_endpoint_cap_reply(init_task_ep_cap, &msg_buf));
 
   run(ep_cap);
 }

@@ -41,9 +41,7 @@ bool launch_device(const std::string& full_path) {
   const device_tree_property&                      reg_prop        = node.properties.at("reg");
   const std::vector<std::pair<uintptr_t, size_t>>& regs            = std::get<std::vector<std::pair<uintptr_t, size_t>>>(reg_prop.value);
 
-  message_buffer_t msg_buf;
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 0;
+  std::vector<mem_cap_t> msg_payload;
 
   for (const auto& [addr, size] : regs) {
     size_t offset = 0;
@@ -52,9 +50,9 @@ bool launch_device(const std::string& full_path) {
       if (!dev_mem_caps.contains(base)) [[unlikely]] {
         return false;
       }
-      mem_cap_t cap                           = dev_mem_caps.at(base);
-      size_t    cap_size                      = unwrap_sysret(sys_mem_cap_size(cap));
-      msg_buf.data[msg_buf.cap_part_length++] = cap;
+      mem_cap_t cap      = dev_mem_caps.at(base);
+      size_t    cap_size = unwrap_sysret(sys_mem_cap_size(cap));
+      msg_payload.push_back(cap);
       offset += cap_size;
     }
   }
@@ -83,7 +81,12 @@ bool launch_device(const std::string& full_path) {
   unwrap_sysret(sys_task_cap_set_reg(task_cap, REG_ARG_0, dst_ep_cap));
   sys_task_cap_resume(task_cap);
 
-  unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, &msg_buf));
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * msg_payload.size());
+  for (size_t i = 0; i < msg_payload.size(); i++) {
+    set_ipc_cap(msg, i, msg_payload[i], false);
+  }
+  unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, msg));
+  delete_ipc_message(msg);
 
   return true;
 }

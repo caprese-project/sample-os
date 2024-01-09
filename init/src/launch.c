@@ -1,4 +1,5 @@
 #include <crt/global.h>
+#include <crt/heap.h>
 #include <init/launch.h>
 #include <init/task.h>
 #include <init/util.h>
@@ -227,16 +228,19 @@ void launch_mm(task_context_t* ctx) {
 
   unwrap_sysret(sys_task_cap_resume(ctx->task_cap));
 
-  message_buffer_t msg_buf;
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 0;
-
-  push_cap(&msg_buf, unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap)));
-  push_cap(&msg_buf, root_boot_info->root_page_table_cap);
-
   const int max_page = get_max_page();
+
+  size_t     buf_size = 2 + max_page + root_boot_info->num_mem_caps;
+  char       msg_buf[sizeof(struct message_header) + buf_size * sizeof(uintptr_t)];
+  message_t* msg               = (message_t*)msg_buf;
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
+
+  set_ipc_cap(msg, 0, unwrap_sysret(sys_task_cap_copy(root_boot_info->root_task_cap)), true);
+  set_ipc_cap(msg, 1, root_boot_info->root_page_table_cap, true);
+
   for (int i = 0; i < max_page; ++i) {
-    push_cap(&msg_buf, root_boot_info->page_table_caps[i]);
+    set_ipc_cap(msg, 2 + i, root_boot_info->page_table_caps[i], true);
   }
 
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
@@ -245,17 +249,13 @@ void launch_mm(task_context_t* ctx) {
       continue;
     }
 
-    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->mem_caps_offset + i]);
+    set_ipc_cap(msg, 2 + max_page + i, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
   }
 
-  unwrap_sysret(sys_endpoint_cap_call(init_mm_ep_cap, &msg_buf));
+  unwrap_sysret(sys_endpoint_cap_call(init_mm_ep_cap, msg));
 
-  __if_unlikely (msg_buf.cap_part_length != 2) {
-    abort();
-  }
-
-  __mm_ep_cap = msg_buf.data[0];
-  __mm_id_cap = msg_buf.data[1];
+  __mm_ep_cap = move_ipc_cap(msg, 0);
+  __mm_id_cap = move_ipc_cap(msg, 1);
 
   __if_unlikely (unwrap_sysret(sys_cap_type(__mm_ep_cap)) != CAP_ENDPOINT) {
     abort();
@@ -263,6 +263,15 @@ void launch_mm(task_context_t* ctx) {
   __if_unlikely (unwrap_sysret(sys_cap_type(__mm_id_cap)) != CAP_ID) {
     abort();
   }
+
+  void* heap_start = __heap_sbrk();
+
+  __if_unlikely (heap_start == NULL) {
+    abort();
+  }
+
+  __brk_start = (uintptr_t)heap_start;
+  __heap_init();
 }
 
 void launch_apm(task_context_t* ctx) {
@@ -274,14 +283,18 @@ void launch_apm(task_context_t* ctx) {
 
   unwrap_sysret(sys_task_cap_resume(ctx->task_cap));
 
-  message_buffer_t msg_buf;
-  unwrap_sysret(sys_endpoint_cap_receive(init_apm_ep_cap, &msg_buf));
+  char       msg_buf[sizeof(struct message_header) + 1 * sizeof(uintptr_t)];
+  message_t* msg               = (message_t*)msg_buf;
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
 
-  __if_unlikely (msg_buf.cap_part_length != 1) {
+  unwrap_sysret(sys_endpoint_cap_receive(init_apm_ep_cap, msg));
+
+  __apm_ep_cap = move_ipc_cap(msg, 0);
+
+  __if_unlikely (unwrap_sysret(sys_cap_type(__apm_ep_cap)) != CAP_ENDPOINT) {
     abort();
   }
-
-  __apm_ep_cap = msg_buf.data[0];
 }
 
 void launch_fs(task_context_t* ctx) {
@@ -355,19 +368,22 @@ void launch_dm(task_context_t* ctx) {
     abort();
   }
 
-  message_buffer_t msg_buf;
-
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 1;
-
-  push_cap(&msg_buf, unwrap_sysret(sys_id_cap_copy(__mm_id_cap)));
-
   root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
+  size_t            buf_size       = 2 + 1 + root_boot_info->arch_info.num_dtb_vp_caps + root_boot_info->num_mem_caps;
+  char              msg_buf[sizeof(struct message_header) + sizeof(uintptr_t) * buf_size];
+  message_t*        msg        = (message_t*)msg_buf;
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
+
+  size_t index = 2;
+
+  set_ipc_cap(msg, index++, unwrap_sysret(sys_id_cap_copy(__mm_id_cap)), true);
 
   for (size_t i = 0; i < root_boot_info->arch_info.num_dtb_vp_caps; ++i) {
-    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->arch_info.dtb_vp_caps_offset + i]);
+    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->arch_info.dtb_vp_caps_offset + i], true);
   }
 
+  size_t num_mem_caps = 0;
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
     // non-device memory caps are already sent to mm. thus, type of the cap is CAP_NULL.
     __if_unlikely (unwrap_sysret(sys_cap_type(root_boot_info->caps[root_boot_info->mem_caps_offset + i])) != CAP_MEM) {
@@ -379,12 +395,14 @@ void launch_dm(task_context_t* ctx) {
       continue;
     }
 
-    push_cap(&msg_buf, root_boot_info->caps[root_boot_info->mem_caps_offset + i]);
+    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
+    ++num_mem_caps;
   }
 
-  msg_buf.data[msg_buf.cap_part_length] = root_boot_info->arch_info.num_dtb_vp_caps;
+  set_ipc_data(msg, 0, root_boot_info->arch_info.num_dtb_vp_caps);
+  set_ipc_data(msg, 1, num_mem_caps);
 
-  unwrap_sysret(sys_endpoint_cap_call(ep_cap, &msg_buf));
+  unwrap_sysret(sys_endpoint_cap_call(ep_cap, msg));
 
   sys_cap_destroy(ep_cap);
 }

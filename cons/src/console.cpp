@@ -1,5 +1,6 @@
 #include <cons/console.h>
 #include <cstring>
+#include <libcaprese/syscall.h>
 
 console::console(console_ops ops, console_mode mode): ops(ops), mode(mode), cursor_pos(0), esc(false) { }
 
@@ -19,11 +20,12 @@ ssize_t console::write(endpoint_cap_t ep_cap, const char* str, size_t size) {
 }
 
 char console::getc(endpoint_cap_t ep_cap) {
-  char ch;
+  char ch = this->ops.getc(ep_cap);
 
-  do {
+  while (ch == static_cast<char>(-1)) {
+    sys_system_yield();
     ch = this->ops.getc(ep_cap);
-  } while (ch == static_cast<char>(-1));
+  };
 
   return ch;
 }

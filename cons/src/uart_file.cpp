@@ -3,30 +3,30 @@
 #include <uart/ipc.h>
 
 void uart_putc(endpoint_cap_t ep_cap, char ch) {
-  message_buffer_t msg_buf;
+  char       msg_buf[sizeof(message_t) + sizeof(uintptr_t) * 2];
+  message_t* msg               = reinterpret_cast<message_t*>(msg_buf);
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(uintptr_t) * 2;
 
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 2;
+  set_ipc_data(msg, 0, UART_MSG_TYPE_PUTC);
+  set_ipc_data(msg, 1, static_cast<uintptr_t>(ch) & 0xff);
 
-  msg_buf.data[0] = UART_MSG_TYPE_PUTC;
-  msg_buf.data[1] = static_cast<uintptr_t>(ch) & 0xff;
-
-  sys_endpoint_cap_call(ep_cap, &msg_buf);
+  sys_endpoint_cap_call(ep_cap, msg);
 }
 
 char uart_getc(endpoint_cap_t ep_cap) {
-  message_buffer_t msg_buf;
+  char       msg_buf[sizeof(message_t) + sizeof(uintptr_t) * 2];
+  message_t* msg               = reinterpret_cast<message_t*>(msg_buf);
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(uintptr_t) * 2;
 
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 1;
+  set_ipc_data(msg, 0, UART_MSG_TYPE_GETC);
 
-  msg_buf.data[0] = UART_MSG_TYPE_GETC;
+  sys_endpoint_cap_call(ep_cap, msg);
 
-  sys_endpoint_cap_call(ep_cap, &msg_buf);
-
-  if (msg_buf.data_part_length == 0 || msg_buf.data[0] != UART_CODE_S_OK) [[unlikely]] {
+  if (get_ipc_data(msg, 0) != UART_CODE_S_OK) {
     return static_cast<char>(-1);
   }
 
-  return static_cast<char>(msg_buf.data[1]);
+  return static_cast<char>(get_ipc_data(msg, 1));
 }

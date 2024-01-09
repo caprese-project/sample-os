@@ -5,33 +5,28 @@
 #include <service/mm.h>
 
 int main() {
-  message_buffer_t msg_buf;
-  unwrap_sysret(sys_endpoint_cap_receive(__this_ep_cap, &msg_buf));
+  message_t* msg = new_ipc_message(0x1000);
+  unwrap_sysret(sys_endpoint_cap_receive(__this_ep_cap, msg));
 
-  if (msg_buf.data_part_length != 1) [[unlikely]] {
-    return 1;
-  }
+  size_t num_dtb_vp_caps  = get_ipc_data(msg, 0);
+  size_t num_dev_mem_caps = get_ipc_data(msg, 1);
 
-  size_t num_dtb_vp_caps  = msg_buf.data[msg_buf.cap_part_length];
-  size_t num_dev_mem_caps = msg_buf.cap_part_length - num_dtb_vp_caps - 1;
-
-  uintptr_t dtb_addr = mm_vpremap(msg_buf.data[0], __mm_id_cap, MM_VMAP_FLAG_READ, msg_buf.data[1], 0);
+  id_cap_t  init_mm_id_cap = move_ipc_cap(msg, 2);
+  uintptr_t dtb_addr       = mm_vpremap(init_mm_id_cap, __mm_id_cap, MM_VMAP_FLAG_READ, move_ipc_cap(msg, 3), 0);
   if (dtb_addr == 0) {
     return 1;
   }
 
   for (size_t i = 1; i < num_dtb_vp_caps; ++i) {
-    uintptr_t addr = mm_vpremap(msg_buf.data[0], __mm_id_cap, MM_VMAP_FLAG_READ, msg_buf.data[1 + i], dtb_addr + KILO_PAGE_SIZE * i);
+    uintptr_t addr = mm_vpremap(init_mm_id_cap, __mm_id_cap, MM_VMAP_FLAG_READ, move_ipc_cap(msg, 3 + i), dtb_addr + KILO_PAGE_SIZE * i);
     if (addr == 0) {
       return 1;
     }
   }
 
   for (size_t i = 0; i < num_dev_mem_caps; ++i) {
-    register_mem_cap(msg_buf.data[1 + num_dtb_vp_caps + i]);
+    register_mem_cap(move_ipc_cap(msg, 3 + num_dtb_vp_caps + i));
   }
-
-  sys_cap_destroy(msg_buf.data[0]);
 
   if (!load_dtb(reinterpret_cast<const char*>(dtb_addr), reinterpret_cast<const char*>(dtb_addr + KILO_PAGE_SIZE * num_dtb_vp_caps))) [[unlikely]] {
     return 1;
@@ -45,9 +40,9 @@ int main() {
     return 1;
   }
 
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 0;
-  unwrap_sysret(sys_endpoint_cap_reply(__this_ep_cap, &msg_buf));
+  destroy_ipc_message(msg);
+  unwrap_sysret(sys_endpoint_cap_reply(__this_ep_cap, msg));
+  delete_ipc_message(msg);
 
   while (true) {
     sys_system_yield();

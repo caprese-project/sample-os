@@ -3,133 +3,102 @@
 #include <crt/global.h>
 #include <fs/ipc.h>
 #include <libcaprese/cxx/id_map.h>
+#include <libcaprese/ipc.h>
 #include <libcaprese/syscall.h>
+#include <memory>
 #include <service/mm.h>
 #include <string>
 
 id_cap_t cons_id_cap;
 
 namespace {
-  void open(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_OPEN);
+  void open(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_OPEN);
 
-    if (msg_buf->cap_part_length != 1 || msg_buf->data_part_length < 2) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    const char* c_path = reinterpret_cast<const char*>(&msg_buf->data[msg_buf->cap_part_length + 1]);
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
 
     id_cap_t fd;
     int      result = cons_open(c_path, &fd);
 
     if (result != FS_CODE_S_OK) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = result;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, result);
       return;
     }
 
-    msg_buf->cap_part_length                = 1;
-    msg_buf->data[0]                        = unwrap_sysret(sys_id_cap_copy(fd));
-    msg_buf->data_part_length               = 1;
-    msg_buf->data[msg_buf->cap_part_length] = FS_CODE_S_OK;
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_cap(msg, 1, unwrap_sysret(sys_id_cap_copy(fd)), false);
   }
 
-  void close(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_CLOSE);
+  void close(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_CLOSE);
 
-    if (msg_buf->cap_part_length != 2) [[unlikely]] {
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    id_cap_t fd = msg_buf->data[1];
+    id_cap_t fd = get_ipc_cap(msg, 2);
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
     int result = cons_close(fd);
 
-    msg_buf_destroy(msg_buf);
-
-    msg_buf->data_part_length               = 1;
-    msg_buf->data[msg_buf->cap_part_length] = result;
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
   }
 
-  void read(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_READ);
+  void read(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_READ);
 
-    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
+    id_cap_t fd = get_ipc_cap(msg, 2);
+    if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    id_cap_t fd = msg_buf->data[1];
+    std::streamsize         size = std::min<std::streamsize>(get_ipc_data(msg, 3), msg->header.payload_capacity - sizeof(uintptr_t) * 2);
+    std::unique_ptr<char[]> buf  = std::make_unique<char[]>(size);
+    size_t                  act_size;
+    int                     result = cons_read(fd, buf.get(), size, &act_size);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
+
+    if (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) [[unlikely]] {
+      return;
+    }
+
+    set_ipc_data(msg, 1, act_size);
+    set_ipc_data_array(msg, 2, buf.get(), act_size);
+  }
+
+  void write(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_WRITE);
+
+    id_cap_t fd = get_ipc_cap(msg, 2);
 
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    std::streamsize size = std::min(msg_buf->data[msg_buf->cap_part_length + 1], (std::size(msg_buf->data) - 2) * sizeof(uintptr_t));
+    std::streamsize size = std::min<std::streamsize>(get_ipc_data(msg, 3), msg->header.payload_length - sizeof(uintptr_t) * 2);
+    size_t          act_size;
+    int             result = cons_write(fd, get_ipc_data_ptr(msg, 4), size, &act_size);
 
-    msg_buf->data[0] = cons_read(fd, &msg_buf->data[2], size, &msg_buf->data[1]);
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
 
-    sys_cap_destroy(fd);
-
-    msg_buf->cap_part_length = 0;
-    if (msg_buf->data[0] != FS_CODE_S_OK) [[unlikely]] {
-      msg_buf->data_part_length = 1;
-    } else {
-      msg_buf->data_part_length = 2 + (msg_buf->data[1] + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
+    if (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) [[unlikely]] {
+      return;
     }
+
+    set_ipc_data(msg, 1, act_size);
   }
 
-  void write(message_buffer_t* msg_buf) {
-    assert(msg_buf->data[msg_buf->cap_part_length] == FS_MSG_TYPE_WRITE);
-
-    if (msg_buf->cap_part_length != 2 || msg_buf->data_part_length < 2) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    id_cap_t fd = msg_buf->data[1];
-
-    if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    std::streamsize size = std::min(msg_buf->data[msg_buf->cap_part_length + 1], (std::size(msg_buf->data) - 4) * sizeof(uintptr_t));
-
-    msg_buf->data[0] = cons_write(fd, &msg_buf->data[msg_buf->cap_part_length + 2], size, &msg_buf->data[1]);
-
-    sys_cap_destroy(fd);
-
-    msg_buf->cap_part_length = 0;
-    if (msg_buf->data[0] != FS_CODE_S_OK) [[unlikely]] {
-      msg_buf->data_part_length = 1;
-    } else {
-      msg_buf->data_part_length = 2;
-    }
-  }
-
-  void (*const table[])(message_buffer_t*) = {
+  constexpr void (*const table[])(message_t*) = {
     [0]                   = NULL,
     [FS_MSG_TYPE_MOUNT]   = NULL,
     [FS_MSG_TYPE_UNMOUNT] = NULL,
@@ -144,56 +113,41 @@ namespace {
     [FS_MSG_TYPE_RMDIR]   = NULL,
   };
 
-  void proc_msg(message_buffer_t* msg_buf) {
-    if (msg_buf->cap_part_length == 0 || msg_buf->data_part_length == 0) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length = 1;
-      msg_buf->data[0]          = FS_CODE_E_ILL_ARGS;
-      return;
-    }
-
-    id_cap_t id = msg_buf->data[0];
+  void proc_msg(message_t* msg) {
+    id_cap_t id = get_ipc_cap(msg, 1);
     if (unwrap_sysret(sys_cap_type(id)) != CAP_ID) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
     if (unwrap_sysret(sys_id_cap_compare(id, cons_id_cap)) != 0) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_ILL_ARGS;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    uintptr_t msg_type = msg_buf->data[msg_buf->cap_part_length];
+    uintptr_t msg_type = get_ipc_data(msg, 0);
 
     if (msg_type < FS_MSG_TYPE_OPEN || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_UNSUPPORTED;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_UNSUPPORTED);
       return;
     }
 
     if (table[msg_type] == NULL) [[unlikely]] {
-      msg_buf_destroy(msg_buf);
-      msg_buf->data_part_length               = 1;
-      msg_buf->data[msg_buf->cap_part_length] = FS_CODE_E_UNSUPPORTED;
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_UNSUPPORTED);
       return;
     }
 
-    table[msg_type](msg_buf);
-
-    if (msg_buf->data[msg_buf->cap_part_length] == FS_CODE_S_OK) {
-      sys_cap_destroy(id);
-    }
+    table[msg_type](msg);
   }
 } // namespace
 
 [[noreturn]] void run() {
-  message_buffer_t msg_buf;
-  sysret_t         sysret;
+  message_t* msg = new_ipc_message(0x1000);
+  sysret_t   sysret;
 
   sysret.error = SYS_E_UNKNOWN;
   while (true) {
@@ -203,13 +157,13 @@ namespace {
     }
 
     if (sysret_succeeded(sysret)) {
-      sysret = sys_endpoint_cap_reply_and_receive(__this_ep_cap, &msg_buf);
+      sysret = sys_endpoint_cap_reply_and_receive(__this_ep_cap, msg);
     } else {
-      sysret = sys_endpoint_cap_receive(__this_ep_cap, &msg_buf);
+      sysret = sys_endpoint_cap_receive(__this_ep_cap, msg);
     }
 
     if (sysret_succeeded(sysret)) {
-      proc_msg(&msg_buf);
+      proc_msg(msg);
     }
   }
 }

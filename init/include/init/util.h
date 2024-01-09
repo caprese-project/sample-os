@@ -9,10 +9,6 @@
 extern const char _ramfs_start[];
 extern const char _ramfs_end[];
 
-inline static void push_cap(message_buffer_t* msg_buf, cap_t cap) {
-  msg_buf->data[msg_buf->cap_part_length++] = msg_buf_transfer(cap);
-}
-
 inline static uintptr_t round_up(uintptr_t value, uintptr_t align) {
   return (value + align - 1) / align * align;
 }

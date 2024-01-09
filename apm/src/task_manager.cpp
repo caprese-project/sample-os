@@ -169,7 +169,7 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   endpoint_cap_t dst_ep_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_ep_cap));
   task.set_register(REG_ARG_6, dst_ep_cap);
 
-  tasks.emplace(std::move(name), std::move(task));
+  tasks.emplace(name, std::move(task));
 
   if ((flags & APM_CREATE_FLAG_SUSPENDED) == 0) {
     tasks.at(name).resume();

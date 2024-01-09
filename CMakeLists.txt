@@ -59,6 +59,7 @@ add_subdirectory(fs)
 add_subdirectory(ramfs)
 add_subdirectory(cons)
 add_subdirectory(shell)
+add_subdirectory(clear)
 
 make_ramfs()
 

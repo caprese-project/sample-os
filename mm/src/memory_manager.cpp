@@ -34,7 +34,11 @@ mem_cap_t fetch_mem_cap(size_t size, size_t alignment) {
   cap_t  mem_cap      = 0;
   size_t mem_cap_size = 0;
 
-  for (auto& [phys_addr, mem_info] : ram_mem_caps) {
+  if (alignment == 0) {
+    alignment = 1;
+  }
+
+  for (const auto& [phys_addr, mem_info] : ram_mem_caps) {
     assert(mem_info.phys_addr == unwrap_sysret(sys_mem_cap_phys_addr(mem_info.cap)));
     assert(mem_info.size == unwrap_sysret(sys_mem_cap_size(mem_info.cap)));
 
@@ -61,7 +65,7 @@ mem_cap_t fetch_mem_cap(size_t size, size_t alignment) {
   }
 
   sysret_t sysret = sys_mem_cap_create_memory_object(mem_cap, size, alignment);
-  if (sysret_failed(sysret)) {
+  if (sysret_failed(sysret)) [[unlikely]] {
     return 0;
   }
 

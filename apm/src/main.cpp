@@ -1,6 +1,7 @@
 #include <apm/server.h>
 #include <crt/global.h>
 #include <crt/heap.h>
+#include <libcaprese/ipc.h>
 #include <service/mm.h>
 #include <stdlib.h>
 
@@ -20,12 +21,15 @@ void init() {
 
   apm_ep_cap = mm_fetch_and_create_endpoint_object();
 
-  message_buffer_t msg_buf;
-  msg_buf.cap_part_length  = 1;
-  msg_buf.data_part_length = 0;
-  msg_buf.data[0]          = unwrap_sysret(sys_endpoint_cap_copy(apm_ep_cap));
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 1);
+  if (msg == nullptr) [[unlikely]] {
+    abort();
+  }
 
-  unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, &msg_buf));
+  set_ipc_cap(msg, 0, unwrap_sysret(sys_endpoint_cap_copy(apm_ep_cap)), false);
+  unwrap_sysret(sys_endpoint_cap_send_long(init_task_ep_cap, msg));
+
+  delete_ipc_message(msg);
 }
 
 int main() {

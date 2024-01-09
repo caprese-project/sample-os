@@ -1,5 +1,6 @@
 #include <crt/global.h>
 #include <internal/branch.h>
+#include <libcaprese/ipc.h>
 #include <libcaprese/syscall.h>
 #include <service/fs.h>
 #include <string.h>
@@ -10,64 +11,44 @@ id_cap_t fs_mount(endpoint_cap_t ep_cap, const char* root_path) {
 
   size_t root_path_len = strlen(root_path) + 1;
 
-  message_buffer_t msg_buf;
-
-  __if_unlikely (root_path_len > sizeof(msg_buf.data) - sizeof(msg_buf.data[0])) {
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 2 + root_path_len);
+  __if_unlikely (msg == NULL) {
     return 0;
   }
 
-  msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = unwrap_sysret(sys_endpoint_cap_copy(ep_cap));
+  set_ipc_data(msg, 0, FS_MSG_TYPE_MOUNT);
+  set_ipc_cap(msg, 1, unwrap_sysret(sys_endpoint_cap_copy(ep_cap)), false);
+  set_ipc_data_array(msg, 2, root_path, root_path_len);
 
-  msg_buf.data_part_length = 1 + (root_path_len + sizeof(msg_buf.data[0]) - 1) / sizeof(msg_buf.data[0]);
-
-  assert(msg_buf.data_part_length <= sizeof(msg_buf.data) / sizeof(msg_buf.data[0]));
-
-  msg_buf.data[msg_buf.cap_part_length] = FS_MSG_TYPE_MOUNT;
-
-  char* str_start = (char*)(&msg_buf.data[msg_buf.cap_part_length + 1]);
-
-  memcpy(str_start, root_path, root_path_len);
-
-  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
+  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
 
   __if_unlikely (sysret_failed(sysret)) {
+    delete_ipc_message(msg);
     return 0;
   }
 
-  __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK) {
+  int      result = get_ipc_data(msg, 0);
+  id_cap_t id_cap = move_ipc_cap(msg, 1);
+
+  delete_ipc_message(msg);
+
+  __if_unlikely (result != FS_CODE_S_OK) {
     return 0;
   }
 
-  assert(msg_buf.cap_part_length == 1);
-  assert(msg_buf.data_part_length == 1);
-
-  return msg_buf.data[0];
+  return id_cap;
 }
 
 void fs_unmount(id_cap_t id_cap) {
   assert(id_cap != 0);
 
-  message_buffer_t msg_buf;
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 2);
 
-  msg_buf.cap_part_length = 1;
-  msg_buf.data[0]         = msg_buf_transfer(id_cap);
+  set_ipc_data(msg, 0, FS_MSG_TYPE_UNMOUNT);
+  set_ipc_cap(msg, 1, id_cap, false);
 
-  msg_buf.data_part_length = 1;
-  msg_buf.data[1]          = FS_MSG_TYPE_UNMOUNT;
-
-  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
-
-  __if_unlikely (sysret_failed(sysret)) {
-    return;
-  }
-
-  __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK) {
-    return;
-  }
-
-  assert(msg_buf.cap_part_length == 0);
-  assert(msg_buf.data_part_length == 1);
+  sys_endpoint_cap_call(__fs_ep_cap, msg);
+  delete_ipc_message(msg);
 }
 
 bool fs_mounted(const char* root_path) {
@@ -75,37 +56,27 @@ bool fs_mounted(const char* root_path) {
 
   size_t root_path_len = strlen(root_path) + 1;
 
-  message_buffer_t msg_buf;
-
-  __if_unlikely (root_path_len > sizeof(msg_buf.data) - sizeof(msg_buf.data[0])) {
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 1 + root_path_len);
+  __if_unlikely (msg == NULL) {
     return false;
   }
 
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 1 + (root_path_len + sizeof(msg_buf.data[0]) - 1) / sizeof(msg_buf.data[0]);
+  set_ipc_data(msg, 0, FS_MSG_TYPE_MOUNTED);
+  set_ipc_data_array(msg, 1, root_path, root_path_len);
 
-  assert(msg_buf.data_part_length <= sizeof(msg_buf.data) / sizeof(msg_buf.data[0]));
-
-  msg_buf.data[0] = FS_MSG_TYPE_MOUNTED;
-
-  char* str_start = (char*)(&msg_buf.data[1]);
-
-  memcpy(str_start, root_path, root_path_len);
-
-  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
+  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
 
   __if_unlikely (sysret_failed(sysret)) {
+    delete_ipc_message(msg);
     return false;
   }
 
-  __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK) {
-    return false;
-  }
+  int  result  = get_ipc_data(msg, 0);
+  bool mounted = get_ipc_data(msg, 1);
 
-  assert(msg_buf.cap_part_length == 0);
-  assert(msg_buf.data_part_length == 2);
+  delete_ipc_message(msg);
 
-  return msg_buf.data[1] != 0;
+  return result == FS_CODE_S_OK && mounted != 0;
 }
 
 id_cap_t fs_open(const char* path) {
@@ -113,65 +84,46 @@ id_cap_t fs_open(const char* path) {
 
   size_t path_len = strlen(path) + 1;
 
-  message_buffer_t msg_buf;
-
-  __if_unlikely (path_len > sizeof(msg_buf.data) - sizeof(msg_buf.data[0])) {
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 1 + path_len);
+  __if_unlikely (msg == NULL) {
     return 0;
   }
 
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 1 + (path_len + sizeof(msg_buf.data[0]) - 1) / sizeof(msg_buf.data[0]);
+  set_ipc_data(msg, 0, FS_MSG_TYPE_OPEN);
+  set_ipc_data_array(msg, 1, path, path_len);
 
-  assert(msg_buf.data_part_length <= sizeof(msg_buf.data) / sizeof(msg_buf.data[0]));
-
-  msg_buf.data[0] = FS_MSG_TYPE_OPEN;
-
-  char* str_start = (char*)(&msg_buf.data[1]);
-
-  memcpy(str_start, path, path_len);
-
-  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
+  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
 
   __if_unlikely (sysret_failed(sysret)) {
+    delete_ipc_message(msg);
     return 0;
   }
 
-  __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK) {
+  int      result = get_ipc_data(msg, 0);
+  id_cap_t fd     = move_ipc_cap(msg, 1);
+
+  delete_ipc_message(msg);
+
+  __if_unlikely (result != FS_CODE_S_OK) {
     return 0;
   }
 
-  assert(msg_buf.cap_part_length == 1);
-  assert(msg_buf.data_part_length == 1);
-
-  return msg_buf.data[0];
+  return fd;
 }
 
 void fs_close(id_cap_t fd) {
   assert(fd != 0);
 
-  message_buffer_t msg_buf;
-
-  msg_buf.cap_part_length  = 0;
-  msg_buf.data_part_length = 1;
-
-  msg_buf.data[0] = FS_MSG_TYPE_CLOSE;
-
-  msg_buf.data[1] = fd;
-
-  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
-
-  __if_unlikely (sysret_failed(sysret)) {
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 2);
+  __if_unlikely (msg == NULL) {
     return;
   }
 
-  __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK) {
-    return;
-  }
+  set_ipc_data(msg, 0, FS_MSG_TYPE_CLOSE);
+  set_ipc_cap(msg, 1, fd, false);
 
-  sys_cap_destroy(fd);
-
-  assert(msg_buf.cap_part_length == 0);
-  assert(msg_buf.data_part_length == 1);
+  sys_endpoint_cap_call(__fs_ep_cap, msg);
+  delete_ipc_message(msg);
 }
 
 ssize_t fs_read(id_cap_t fd, void* buf, size_t count) {
@@ -182,47 +134,52 @@ ssize_t fs_read(id_cap_t fd, void* buf, size_t count) {
     return 0;
   }
 
-  message_buffer_t msg_buf;
+  message_t* msg = new_ipc_message(0x1000);
+  __if_unlikely (msg == NULL) {
+    return -1;
+  }
 
-  const size_t chunk_size = sizeof(msg_buf.data) - sizeof(uintptr_t) * 2;
+  const size_t chunk_size = 0x1000 - sizeof(uintptr_t) * 4;
 
-  size_t read_size = 0;
-  while (read_size < count) {
+  ssize_t read_size = 0;
+  while (read_size < (ssize_t)count) {
     size_t chunk_read_size = count - read_size;
     if (chunk_read_size > chunk_size) {
       chunk_read_size = chunk_size;
     }
 
-    msg_buf.cap_part_length  = 1;
-    msg_buf.data_part_length = 2;
+    set_ipc_data(msg, 0, FS_MSG_TYPE_READ);
+    set_ipc_cap(msg, 1, fd, true);
+    set_ipc_data(msg, 2, chunk_read_size);
 
-    msg_buf.data[0] = msg_buf_delegate(fd);
-
-    msg_buf.data[1] = FS_MSG_TYPE_READ;
-    msg_buf.data[2] = chunk_read_size;
-
-    sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
+    sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
 
     __if_unlikely (sysret_failed(sysret)) {
-      return -1;
+      set_ipc_data(msg, 1, 0);
+      read_size = -1;
+      break;
     }
 
-    __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK && msg_buf.data[msg_buf.cap_part_length] != FS_CODE_E_EOF) {
-      return -1;
+    int result = get_ipc_data(msg, 0);
+
+    __if_unlikely (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) {
+      read_size = -1;
+      break;
     }
 
-    assert(msg_buf.cap_part_length == 0);
-    assert(msg_buf.data_part_length >= 2);
-
-    size_t act_size = msg_buf.data[1];
-    memcpy((char*)buf + read_size, &msg_buf.data[2], act_size);
+    size_t act_size = get_ipc_data(msg, 1);
+    memcpy((char*)buf + read_size, get_ipc_data_ptr(msg, 2), act_size);
 
     read_size += act_size;
 
-    __if_unlikely (msg_buf.data[msg_buf.cap_part_length] == FS_CODE_E_EOF) {
+    __if_unlikely (result == FS_CODE_E_EOF) {
       break;
     }
+
+    destroy_ipc_message(msg);
   }
+
+  delete_ipc_message(msg);
 
   return read_size;
 }
@@ -235,47 +192,51 @@ ssize_t fs_write(id_cap_t fd, const void* buf, size_t count) {
     return 0;
   }
 
-  message_buffer_t msg_buf;
+  message_t* msg = new_ipc_message(0x1000);
+  __if_unlikely (msg == NULL) {
+    return -1;
+  }
 
-  const size_t chunk_size = sizeof(msg_buf.data) - sizeof(uintptr_t) * 3;
+  const size_t chunk_size = 0x1000 - sizeof(uintptr_t) * 4;
+  const char*  ptr        = (const char*)buf;
 
-  size_t write_size = 0;
-  while (write_size < count) {
-    size_t chunk_write_size = count - write_size;
+  ssize_t written_size = 0;
+  while (written_size < (ssize_t)count) {
+    size_t chunk_write_size = count - written_size;
     if (chunk_write_size > chunk_size) {
       chunk_write_size = chunk_size;
     }
 
-    msg_buf.cap_part_length  = 1;
-    msg_buf.data_part_length = 2 + (chunk_write_size + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
+    set_ipc_data(msg, 0, FS_MSG_TYPE_WRITE);
+    set_ipc_cap(msg, 1, fd, true);
+    set_ipc_data(msg, 2, chunk_write_size);
+    set_ipc_data_array(msg, 3, ptr + written_size, chunk_write_size);
 
-    msg_buf.data[0] = msg_buf_delegate(fd);
-
-    msg_buf.data[1] = FS_MSG_TYPE_WRITE;
-    msg_buf.data[2] = chunk_write_size;
-
-    memcpy(&msg_buf.data[3], (const char*)buf + write_size, chunk_write_size);
-
-    sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, &msg_buf);
+    sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
 
     __if_unlikely (sysret_failed(sysret)) {
-      return -1;
-    }
-
-    __if_unlikely (msg_buf.data[msg_buf.cap_part_length] != FS_CODE_S_OK && msg_buf.data[msg_buf.cap_part_length] != FS_CODE_E_EOF) {
-      return -1;
-    }
-
-    assert(msg_buf.cap_part_length == 0);
-    assert(msg_buf.data_part_length == 2);
-
-    size_t act_size = msg_buf.data[1];
-    write_size += act_size;
-
-    __if_unlikely (msg_buf.data[msg_buf.cap_part_length] == FS_CODE_E_EOF) {
+      written_size = -1;
       break;
     }
+
+    int result = get_ipc_data(msg, 0);
+
+    __if_unlikely (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) {
+      written_size = -1;
+      break;
+    }
+
+    size_t act_size = get_ipc_data(msg, 1);
+    written_size += act_size;
+
+    __if_unlikely (result == FS_CODE_E_EOF) {
+      break;
+    }
+
+    destroy_ipc_message(msg);
   }
 
-  return write_size;
+  delete_ipc_message(msg);
+
+  return written_size;
 }

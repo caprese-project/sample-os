@@ -13,10 +13,14 @@ int main(void) {
     abort();
   }
 
-  message_buffer_t msg_buf;
-  unwrap_sysret(sys_endpoint_cap_receive(dm_ep_cap, &msg_buf));
+  char       msg_buf[sizeof(struct message_header) + sizeof(uintptr_t) * 1];
+  message_t* msg               = (message_t*)msg_buf;
+  msg->header.payload_length   = 0;
+  msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
 
-  virt_page_cap_t vp_cap    = unwrap_sysret(sys_mem_cap_create_virt_page_object(msg_buf.data[0], true, true, false, KILO_PAGE));
+  unwrap_sysret(sys_endpoint_cap_receive(dm_ep_cap, msg));
+
+  virt_page_cap_t vp_cap    = unwrap_sysret(sys_mem_cap_create_virt_page_object(move_ipc_cap(msg, 0), true, true, false, KILO_PAGE));
   uintptr_t       base_addr = mm_vpmap(__mm_id_cap, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, vp_cap, 0);
   if (base_addr == 0) {
     abort();
