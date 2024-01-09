@@ -4,6 +4,7 @@
 #include <memory>
 #include <service/apm.h>
 #include <service/mm.h>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -99,23 +100,20 @@ int main() {
       continue;
     }
 
+    std::stringstream stream(line);
+
     std::string              command;
     std::vector<std::string> arguments;
 
-    size_t pos = line.find(' ');
-    if (pos != line.npos) {
-      command = line.substr(0, pos);
-      while (true) {
-        size_t next_pos = line.find(' ', pos + 1);
-        if (next_pos == line.npos) [[unlikely]] {
-          arguments.push_back(line.substr(pos + 1));
-          break;
-        }
-        arguments.push_back(line.substr(pos + 1, next_pos - pos - 1));
-        pos = next_pos;
+    stream >> command;
+
+    while (true) {
+      std::string argument;
+      stream >> argument;
+      if (argument.empty()) [[unlikely]] {
+        break;
       }
-    } else {
-      command = line;
+      arguments.push_back(std::move(argument));
     }
 
     do_command(command, arguments);
