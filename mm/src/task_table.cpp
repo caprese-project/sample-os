@@ -72,7 +72,7 @@ int task_table::attach(
       grow_stack(id, stack_commit, stack_data, stack_data_size);
     }
 
-    if (sysret_failed(sys_task_cap_set_reg(task, REG_STACK_POINTER, user_space_end))) [[unlikely]] {
+    if (sysret_failed(sys_task_cap_set_reg(task, REG_STACK_POINTER, user_space_end - stack_data_size))) [[unlikely]] {
       return MM_CODE_E_FAILURE;
     }
   } else {
@@ -419,7 +419,7 @@ int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base, const 
     }
     memcpy(reinterpret_cast<void*>(va + offset), data, data_size);
 
-    result = vpremap(__this_id_cap, id, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, virt_page_cap, va_base, &va);
+    result = remap(__this_id_cap, id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, va, va_base);
     if (result != MM_CODE_S_OK) [[unlikely]] {
       return result;
     }
@@ -511,21 +511,17 @@ int task_table::grow_stack(id_cap_t id, size_t size, const void* data, size_t da
     for (int level = max_page; level >= KILO_PAGE; --level) {
       size_t page_size = get_page_size(level);
       if (sz >= page_size && start % page_size == 0) {
-        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start, data_ptr, data_size);
+        size_t data_offset = 0;
+        if (sz - page_size < data_size) [[unlikely]] {
+          data_offset = data_size - (sz - page_size);
+        }
+        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start, data_ptr, data_offset);
         if (result != MM_CODE_S_OK) [[unlikely]] {
           return result;
         }
         start += page_size;
-
-        if (data_ptr != nullptr) [[unlikely]] {
-          data_ptr += page_size;
-          if (data_size > page_size) {
-            data_size -= page_size;
-          } else {
-            data_ptr  = nullptr;
-            data_size = 0;
-          }
-        }
+        data_size -= data_offset;
+        data_ptr += data_offset;
       }
     }
   }

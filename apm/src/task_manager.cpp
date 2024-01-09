@@ -44,22 +44,33 @@ task::task(std::string name, uint32_t parent_tid, const std::vector<std::string>
     argv_len += arg.size() + 1;
   }
 
-  std::unique_ptr<char[]> argv = std::make_unique<char[]>(argv_len);
-  size_t                  pos  = 0;
-  for (const auto& arg : args) {
-    char* ptr = argv.get() + pos;
+  size_t    argv_index_len  = sizeof(char*) * args.size();
+  size_t    argv_total_len  = (argv_len + sizeof(char*) - 1) / sizeof(char*) * sizeof(char*) + argv_index_len;
+  uintptr_t user_space_end  = unwrap_sysret(sys_system_user_space_end());
+  uintptr_t argv_index_root = user_space_end - argv_total_len;
+  uintptr_t argv_root       = argv_index_root + argv_index_len;
+
+  std::unique_ptr<char[]> stack_data      = std::make_unique<char[]>(argv_total_len);
+  char*                   argv_data       = stack_data.get() + argv_index_len;
+  char**                  argv_index_data = reinterpret_cast<char**>(stack_data.get());
+  size_t                  pos             = 0;
+  for (size_t i = 0; i < args.size(); ++i) {
+    const std::string& arg = args[i];
+
+    char* ptr = argv_data + pos;
     memcpy(ptr, arg.c_str(), arg.size());
     ptr[arg.size()] = '\0';
+
+    argv_index_data[i] = reinterpret_cast<char*>(argv_root + pos);
+
     pos += arg.size() + 1;
   }
 
   size_t stack_commit = std::max<size_t>(4 * KILO_PAGE_SIZE, (argv_len + KILO_PAGE_SIZE - 1) / KILO_PAGE_SIZE * KILO_PAGE_SIZE);
-  mm_id_cap           = mm_attach(task_cap.get(), root_page_table_cap.get(), 0, 0, stack_commit, argv.get(), argv_len);
+  mm_id_cap           = mm_attach(task_cap.get(), root_page_table_cap.get(), 0, 0, stack_commit, stack_data.get(), argv_total_len);
 
-  uintptr_t user_space_end = unwrap_sysret(sys_system_user_space_end());
-  uintptr_t argv_root      = user_space_end - argv_len;
   sys_task_cap_set_reg(task_cap.get(), REG_ARG_0, args.size());
-  sys_task_cap_set_reg(task_cap.get(), REG_ARG_1, argv_root);
+  sys_task_cap_set_reg(task_cap.get(), REG_ARG_1, argv_index_root);
 
   ep_cap = mm_fetch_and_create_endpoint_object();
 
