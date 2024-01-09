@@ -62,7 +62,7 @@ bool launch_device(const std::string& full_path) {
   for (const std::string& compatible : compatibles) {
     if (known_devices.contains(compatible)) {
       auto& [path, name] = known_devices.at(compatible);
-      task_cap           = apm_create(path.c_str(), name.c_str(), APM_CREATE_FLAG_DETACHED | APM_CREATE_FLAG_SUSPENDED);
+      task_cap           = apm_create(path.c_str(), name.c_str(), APM_CREATE_FLAG_DETACHED | APM_CREATE_FLAG_SUSPENDED, nullptr);
       break;
     }
   }

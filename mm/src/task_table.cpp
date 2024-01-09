@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstring>
 #include <libcaprese/syscall.h>
 #include <map>
 #include <mm/ipc.h>
@@ -28,7 +29,8 @@ task_table::~task_table() {
   // TODO: Release resources.
 }
 
-int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal) {
+int task_table::attach(
+    id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal, const void* stack_data, size_t stack_data_size) {
   assert(unwrap_sysret(sys_cap_type(id)) == CAP_ID);
   assert(unwrap_sysret(sys_cap_type(task)) == CAP_TASK);
   assert(unwrap_sysret(sys_cap_type(root_page_table)) == CAP_PAGE_TABLE);
@@ -67,7 +69,7 @@ int task_table::attach(id_cap_t id, task_cap_t task, page_table_cap_t root_page_
 
   if (!internal) {
     if (stack_commit > 0) {
-      grow_stack(id, stack_commit);
+      grow_stack(id, stack_commit, stack_data, stack_data_size);
     }
 
     if (sysret_failed(sys_task_cap_set_reg(task, REG_STACK_POINTER, user_space_end))) [[unlikely]] {
@@ -119,7 +121,7 @@ int task_table::vmap(id_cap_t id, int level, int flags, uintptr_t va_base, uintp
     return MM_CODE_E_ILL_ARGS;
   }
 
-  int result = map(id, level, flags, va_base);
+  int result = map(id, level, flags, va_base, nullptr, 0);
   if (result != MM_CODE_S_OK) [[unlikely]] {
     return result;
   }
@@ -370,7 +372,7 @@ page_table_cap_t task_table::walk(id_cap_t id, int level, uintptr_t va_base) {
   return info.page_table_caps[level].at(get_page_table_base_addr(va_base, level));
 }
 
-int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base) {
+int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base, const void* data, size_t data_size) {
   assert(table.contains(id));
   assert(va_base % get_page_size(level) == 0);
   assert(va_base > 0);
@@ -403,8 +405,28 @@ int task_table::map(id_cap_t id, int level, int flags, uintptr_t va_base) {
   int index = get_page_table_index(va_base, level);
 
   virt_page_cap_t virt_page_cap = unwrap_sysret(sys_mem_cap_create_virt_page_object(mem_cap, readable, writable, executable, level));
-  if (sysret_failed(sys_page_table_cap_map_page(page_table_cap, index, readable, writable, executable, virt_page_cap))) {
-    return MM_CODE_E_FAILURE;
+
+  if (data != nullptr) [[unlikely]] {
+    uintptr_t va;
+    int       result = vpmap(__this_id_cap, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, virt_page_cap, 0, &va);
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      return result;
+    }
+
+    size_t offset = 0;
+    if (data_size < get_page_size(level)) {
+      offset = get_page_size(level) - data_size;
+    }
+    memcpy(reinterpret_cast<void*>(va + offset), data, data_size);
+
+    result = vpremap(__this_id_cap, id, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, virt_page_cap, va_base, &va);
+    if (result != MM_CODE_S_OK) [[unlikely]] {
+      return result;
+    }
+  } else {
+    if (sysret_failed(sys_page_table_cap_map_page(page_table_cap, index, readable, writable, executable, virt_page_cap))) {
+      return MM_CODE_E_FAILURE;
+    }
   }
 
   info.virt_page_caps[va_base] = virt_page_cap;
@@ -463,7 +485,7 @@ int task_table::remap(id_cap_t src_id, id_cap_t dst_id, int level, int flags, ui
   return MM_CODE_S_OK;
 }
 
-int task_table::grow_stack(id_cap_t id, size_t size) {
+int task_table::grow_stack(id_cap_t id, size_t size, const void* data, size_t data_size) {
   if (!table.contains(id)) [[unlikely]] {
     return MM_CODE_E_NOT_ATTACHED;
   }
@@ -482,16 +504,28 @@ int task_table::grow_stack(id_cap_t id, size_t size) {
   assert(end % KILO_PAGE_SIZE == 0);
   assert(start % KILO_PAGE_SIZE == 0);
 
+  const char* data_ptr = reinterpret_cast<const char*>(data);
+
   while (start < end) {
     size_t sz = end - start;
     for (int level = max_page; level >= KILO_PAGE; --level) {
       size_t page_size = get_page_size(level);
       if (sz >= page_size && start % page_size == 0) {
-        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start);
+        int result = map(id, level, MM_VMAP_FLAG_READ | MM_VMAP_FLAG_WRITE, start, data_ptr, data_size);
         if (result != MM_CODE_S_OK) [[unlikely]] {
           return result;
         }
         start += page_size;
+
+        if (data_ptr != nullptr) [[unlikely]] {
+          data_ptr += page_size;
+          if (data_size > page_size) {
+            data_size -= page_size;
+          } else {
+            data_ptr  = nullptr;
+            data_size = 0;
+          }
+        }
       }
     }
   }
@@ -501,8 +535,9 @@ int task_table::grow_stack(id_cap_t id, size_t size) {
   return MM_CODE_S_OK;
 }
 
-int attach_task(id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal) {
-  return table.attach(id, task, root_page_table, stack_available, total_available, stack_commit, internal);
+int attach_task(
+    id_cap_t id, task_cap_t task, page_table_cap_t root_page_table, size_t stack_available, size_t total_available, size_t stack_commit, bool internal, const void* stack_data, size_t stack_data_size) {
+  return table.attach(id, task, root_page_table, stack_available, total_available, stack_commit, internal, stack_data, stack_data_size);
 }
 
 int detach_task(id_cap_t id) {
@@ -526,7 +561,7 @@ int vpremap_task(id_cap_t src_id, id_cap_t dst_id, int flags, virt_page_cap_t vi
 }
 
 int grow_stack(id_cap_t id, size_t size) {
-  return table.grow_stack(id, size);
+  return table.grow_stack(id, size, nullptr, 0);
 }
 
 task_info& get_task_info(id_cap_t id) {

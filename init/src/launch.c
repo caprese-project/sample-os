@@ -155,7 +155,7 @@ static void create_and_setup_task(task_context_t* ctx, const char* name) {
 
   const int max_page = get_max_page();
 
-  ctx->mm_id_cap = mm_attach(ctx->task_cap, ctx->page_table_caps[max_page][0], MM_STACK_DEFAULT, MM_TOTAL_DEFAULT, 4 * KILO_PAGE_SIZE);
+  ctx->mm_id_cap = mm_attach(ctx->task_cap, ctx->page_table_caps[max_page][0], MM_STACK_DEFAULT, MM_TOTAL_DEFAULT, 4 * KILO_PAGE_SIZE, NULL, 0);
   __if_unlikely (ctx->mm_id_cap == 0 || unwrap_sysret(sys_cap_type(ctx->mm_id_cap)) != CAP_ID) {
     abort();
   }
@@ -358,7 +358,7 @@ void launch_ramfs(task_context_t* ctx) {
 }
 
 void launch_dm(task_context_t* ctx) {
-  ctx->task_cap = apm_create("/init/dm", "dm", APM_CREATE_FLAG_DEFAULT);
+  ctx->task_cap = apm_create("/init/dm", "dm", APM_CREATE_FLAG_DEFAULT, NULL);
   __if_unlikely (ctx->task_cap == 0) {
     abort();
   }
@@ -408,7 +408,7 @@ void launch_dm(task_context_t* ctx) {
 }
 
 void launch_cons(task_context_t* ctx) {
-  ctx->task_cap = apm_create("/init/cons", "cons", APM_CREATE_FLAG_DEFAULT);
+  ctx->task_cap = apm_create("/init/cons", "cons", APM_CREATE_FLAG_DEFAULT, NULL);
   __if_unlikely (ctx->task_cap == 0) {
     abort();
   }
@@ -419,7 +419,7 @@ void launch_cons(task_context_t* ctx) {
 }
 
 void launch_shell(task_context_t* ctx) {
-  ctx->task_cap = apm_create("/init/shell", "shell", APM_CREATE_FLAG_DEFAULT);
+  ctx->task_cap = apm_create("/init/shell", "shell", APM_CREATE_FLAG_DEFAULT, NULL);
   __if_unlikely (ctx->task_cap == 0) {
     abort();
   }

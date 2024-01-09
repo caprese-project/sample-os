@@ -15,6 +15,8 @@ namespace {
     size_t           stack_available     = get_ipc_data(msg, 3);
     size_t           total_available     = get_ipc_data(msg, 4);
     size_t           stack_commit        = get_ipc_data(msg, 5);
+    size_t           stack_data_size     = get_ipc_data(msg, 6);
+    const void*      stack_data          = get_ipc_data_ptr(msg, 7);
 
     if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK || unwrap_sysret(sys_cap_type(root_page_table_cap)) != CAP_PAGE_TABLE) [[unlikely]] {
       destroy_ipc_message(msg);
@@ -24,7 +26,7 @@ namespace {
 
     id_cap_t id_cap = unwrap_sysret(sys_id_cap_create());
 
-    int result = attach_task(id_cap, task_cap, root_page_table_cap, stack_available, total_available, stack_commit, false);
+    int result = attach_task(id_cap, task_cap, root_page_table_cap, stack_available, total_available, stack_commit, false, stack_data, stack_data_size);
 
     destroy_ipc_message(msg);
 
@@ -246,7 +248,7 @@ namespace {
   const size_t cap_space_size  = unwrap_sysret(sys_system_cap_size(CAP_CAP_SPACE));
   const size_t cap_space_align = unwrap_sysret(sys_system_cap_align(CAP_CAP_SPACE));
 
-  message_t* msg = new_ipc_message(0x100);
+  message_t* msg = new_ipc_message(0x1000);
   sysret_t   sysret;
 
   sysret.error = SYS_E_UNKNOWN;

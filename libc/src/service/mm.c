@@ -6,11 +6,15 @@
 #include <mm/ipc.h>
 #include <service/mm.h>
 
-id_cap_t mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, size_t stack_available, size_t total_available, size_t stack_commit) {
+id_cap_t mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, size_t stack_available, size_t total_available, size_t stack_commit, const void* stack_data, size_t stack_data_size) {
   assert(unwrap_sysret(sys_cap_type(task_cap)) == CAP_TASK);
   assert(unwrap_sysret(sys_cap_type(root_page_table_cap)) == CAP_PAGE_TABLE);
 
-  char       msg_buf[sizeof(struct message_header) + sizeof(uintptr_t) * 6];
+  __if_unlikely (stack_data == NULL) {
+    stack_data_size = 0;
+  }
+
+  char       msg_buf[sizeof(struct message_header) + sizeof(uintptr_t) * 7 + stack_data_size];
   message_t* msg               = (message_t*)msg_buf;
   msg->header.payload_length   = 0;
   msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
@@ -21,6 +25,8 @@ id_cap_t mm_attach(task_cap_t task_cap, page_table_cap_t root_page_table_cap, si
   set_ipc_data(msg, 3, stack_available);
   set_ipc_data(msg, 4, total_available);
   set_ipc_data(msg, 5, stack_commit);
+  set_ipc_data(msg, 6, stack_data_size);
+  set_ipc_data_array(msg, 7, stack_data, stack_data_size);
 
   sysret_t sysret = sys_endpoint_cap_call(__mm_ep_cap, msg);
 

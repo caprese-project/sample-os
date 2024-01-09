@@ -3,15 +3,18 @@
 #include <apm/server.h>
 #include <apm/task_manager.h>
 #include <crt/global.h>
+#include <cstring>
 #include <libcaprese/syscall.h>
+#include <memory>
 #include <service/mm.h>
 #include <utility>
 
 namespace {
-  task_manager task_manager_instance;
+  std::map<std::string, task> task_table;
+  std::map<uint32_t, task&>   tid_reference_table;
 } // namespace
 
-task::task(std::string name) noexcept: name(std::move(name)), tid(0) {
+task::task(std::string name, uint32_t parent_tid, const std::vector<std::string>& args) noexcept: name(std::move(name)), tid(0) {
   cap_space_cap = mm_fetch_and_create_cap_space_object();
   if (!cap_space_cap) [[unlikely]] {
     return;
@@ -36,9 +39,34 @@ task::task(std::string name) noexcept: name(std::move(name)), tid(0) {
 
   tid = unwrap_sysret(sys_task_cap_tid(task_cap.get()));
 
-  mm_id_cap = mm_attach(task_cap.get(), root_page_table_cap.get(), 0, 0, 4 * KILO_PAGE_SIZE);
+  size_t argv_len = 0;
+  for (const auto& arg : args) {
+    argv_len += arg.size() + 1;
+  }
+
+  std::unique_ptr<char[]> argv = std::make_unique<char[]>(argv_len);
+  size_t                  pos  = 0;
+  for (const auto& arg : args) {
+    char* ptr = argv.get() + pos;
+    memcpy(ptr, arg.c_str(), arg.size());
+    ptr[arg.size()] = '\0';
+    pos += arg.size() + 1;
+  }
+
+  size_t stack_commit = std::max<size_t>(4 * KILO_PAGE_SIZE, (argv_len + KILO_PAGE_SIZE - 1) / KILO_PAGE_SIZE * KILO_PAGE_SIZE);
+  mm_id_cap           = mm_attach(task_cap.get(), root_page_table_cap.get(), 0, 0, stack_commit, argv.get(), argv_len);
+
+  uintptr_t user_space_end = unwrap_sysret(sys_system_user_space_end());
+  uintptr_t argv_root      = user_space_end - argv_len;
+  sys_task_cap_set_reg(task_cap.get(), REG_ARG_0, args.size());
+  sys_task_cap_set_reg(task_cap.get(), REG_ARG_1, argv_root);
 
   ep_cap = mm_fetch_and_create_endpoint_object();
+
+  if (parent_tid != 0 && task_exists(parent_tid)) {
+    task& parent_task = lookup_task(parent_tid);
+    this->env         = parent_task.env;
+  }
 }
 
 task::task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) noexcept: task_cap(task_cap), ep_cap(ep_cap), name(std::move(name)), tid(0) {
@@ -100,6 +128,30 @@ uint32_t task::get_tid() const noexcept {
   return tid;
 }
 
+bool task::set_env(const std::string& env, std::string value) noexcept {
+  if (env.empty()) {
+    return false;
+  }
+
+  this->env[env] = std::move(value);
+
+  return true;
+}
+
+bool task::get_env(const std::string& env, std::string& value) const noexcept {
+  if (env.empty()) {
+    return false;
+  }
+
+  if (!this->env.contains(env)) {
+    return false;
+  }
+
+  value = this->env.at(env);
+
+  return true;
+}
+
 void task::set_register(uintptr_t reg, uintptr_t value) noexcept {
   sys_task_cap_set_reg(task_cap.get(), reg, value);
 }
@@ -138,12 +190,16 @@ void task::suspend() const {
   sys_task_cap_suspend(task_cap.get());
 }
 
-bool task_manager::create(std::string name, std::reference_wrapper<std::istream> data, int flags) {
-  if (tasks.contains(name)) [[unlikely]] {
+bool create_task(std::string name, std::reference_wrapper<std::istream> data, int flags, uint32_t parent_tid, const std::vector<std::string>& args) {
+  if (task_table.contains(name)) [[unlikely]] {
     return false;
   }
 
-  task task(name);
+  if (flags & APM_CREATE_FLAG_DETACHED) [[unlikely]] {
+    parent_tid = 0;
+  }
+
+  task task(name, parent_tid, args);
 
   if (!task.load_program(data)) {
     return false;
@@ -169,49 +225,41 @@ bool task_manager::create(std::string name, std::reference_wrapper<std::istream>
   endpoint_cap_t dst_ep_cap    = unwrap_sysret(sys_task_cap_transfer_cap(task.get_task_cap().get(), copied_ep_cap));
   task.set_register(REG_ARG_6, dst_ep_cap);
 
-  tasks.emplace(name, std::move(task));
+  auto        result   = task_table.emplace(name, std::move(task));
+  class task& task_ref = result.first->second;
+  tid_reference_table.emplace(task_ref.get_tid(), task_ref);
 
   if ((flags & APM_CREATE_FLAG_SUSPENDED) == 0) {
-    tasks.at(name).resume();
+    task_table.at(name).resume();
   }
 
   return true;
-}
-
-bool task_manager::attach(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
-  if (tasks.contains(name)) [[unlikely]] {
-    return false;
-  }
-
-  tasks.emplace(std::move(name), task(std::move(name), task_cap, ep_cap));
-
-  return true;
-}
-
-bool task_manager::exists(const std::string& name) const {
-  return tasks.contains(name);
-}
-
-task& task_manager::lookup(const std::string& name) {
-  return tasks.at(name);
-}
-
-const task& task_manager::lookup(const std::string& name) const {
-  return tasks.at(name);
-}
-
-bool create_task(std::string name, std::reference_wrapper<std::istream> data, int flags) {
-  return task_manager_instance.create(std::move(name), data, flags);
 }
 
 bool attach_task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
-  return task_manager_instance.attach(std::move(name), task_cap, ep_cap);
+  if (task_table.contains(name)) [[unlikely]] {
+    return false;
+  }
+
+  auto  result   = task_table.emplace(std::move(name), task(std::move(name), task_cap, ep_cap));
+  task& task_ref = result.first->second;
+  tid_reference_table.emplace(task_ref.get_tid(), task_ref);
+
+  return true;
 }
 
 bool task_exists(const std::string& name) {
-  return task_manager_instance.exists(name);
+  return task_table.contains(name);
+}
+
+bool task_exists(uint32_t tid) {
+  return tid_reference_table.contains(tid);
 }
 
 task& lookup_task(const std::string& name) {
-  return task_manager_instance.lookup(name);
+  return task_table.at(name);
+}
+
+task& lookup_task(uint32_t tid) {
+  return tid_reference_table.at(tid);
 }
