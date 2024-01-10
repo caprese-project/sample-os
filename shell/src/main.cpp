@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <libcaprese/syscall.h>
+#include <map>
 #include <memory>
 #include <service/apm.h>
 #include <service/fs.h>
@@ -9,11 +10,40 @@
 #include <string>
 #include <vector>
 
-endpoint_cap_t           kill_notify_ep_cap;
-std::vector<std::string> path_env;
+endpoint_cap_t                                                   kill_notify_ep_cap;
+std::vector<std::string>                                         path_env;
+std::map<std::string, void (*)(const std::vector<std::string>&)> builtin_commands;
+
+[[noreturn]] void do_exit(const std::vector<std::string>& arguments) {
+  int status = 0;
+  if (!arguments.empty()) {
+    status = std::stoi(arguments[0]);
+  }
+  exit(status);
+}
+
+void do_setenv(const std::vector<std::string>& arguments) {
+  if (arguments.size() != 2) [[unlikely]] {
+    std::cout << "Usage: setenv <name> <value>" << std::endl;
+    return;
+  }
+
+  setenv(arguments[0].c_str(), arguments[1].c_str(), true);
+}
+
+void do_cd(const std::vector<std::string>& arguments) {
+  if (arguments.empty()) {
+    setenv("PWD", "/", true);
+  } else if (arguments.size() == 1) {
+    setenv("PWD", arguments[0].c_str(), true);
+  } else {
+    std::cout << "Usage: cd [<path>]" << std::endl;
+  }
+}
 
 void init() {
   setenv("PATH", "/init:/bin", false);
+  setenv("PWD", "/", false);
 
   std::string paths = getenv("PATH");
   size_t      pos   = 0;
@@ -26,6 +56,10 @@ void init() {
     path_env.push_back(paths.substr(pos, next_pos - pos));
     pos = next_pos + 1;
   }
+
+  builtin_commands["exit"]   = do_exit;
+  builtin_commands["setenv"] = do_setenv;
+  builtin_commands["cd"]     = do_cd;
 }
 
 std::string path_join(const std::string& path, const std::string& name) {
@@ -44,14 +78,6 @@ void disp_terminal() {
   std::cout << "$> " << std::flush;
 }
 
-[[noreturn]] void do_exit(const std::vector<std::string>& arguments) {
-  int status = 0;
-  if (!arguments.empty()) {
-    status = std::stoi(arguments[0]);
-  }
-  exit(status);
-}
-
 std::string find_program(const std::string& command) {
   for (const auto& path : path_env) {
     std::string full_path = path_join(path, command);
@@ -63,8 +89,9 @@ std::string find_program(const std::string& command) {
 }
 
 void do_command(const std::string& command, const std::vector<std::string>& arguments) {
-  if (command == "exit") {
-    do_exit(arguments);
+  if (builtin_commands.contains(command)) {
+    builtin_commands[command](arguments);
+    return;
   }
 
   std::unique_ptr<const char*[]> argv = std::make_unique<const char*[]>(arguments.size() + 2);

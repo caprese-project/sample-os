@@ -62,6 +62,7 @@ add_subdirectory(shell)
 add_subdirectory(echo)
 add_subdirectory(clear)
 add_subdirectory(printenv)
+add_subdirectory(pwd)
 
 make_ramfs()
 
