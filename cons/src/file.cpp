@@ -51,6 +51,10 @@ bool cons_rmfile(const std::string& path) {
   return true;
 }
 
+bool cons_exists(const std::string& path) {
+  return file_table.contains(path);
+}
+
 int cons_open(const std::string& path, id_cap_t* dst_fd) {
   if (!file_table.contains(path)) [[unlikely]] {
     return FS_CODE_E_NO_SUCH_FILE;

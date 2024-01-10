@@ -4,14 +4,15 @@
 #define FS_MSG_TYPE_MOUNT   1
 #define FS_MSG_TYPE_UNMOUNT 2
 #define FS_MSG_TYPE_MOUNTED 3
-#define FS_MSG_TYPE_OPEN    4
-#define FS_MSG_TYPE_CLOSE   5
-#define FS_MSG_TYPE_READ    6
-#define FS_MSG_TYPE_WRITE   7
-#define FS_MSG_TYPE_SEEK    8
-#define FS_MSG_TYPE_TELL    9
-#define FS_MSG_TYPE_MKDIR   10
-#define FS_MSG_TYPE_RMDIR   11
+#define FS_MSG_TYPE_EXISTS  4
+#define FS_MSG_TYPE_OPEN    5
+#define FS_MSG_TYPE_CLOSE   6
+#define FS_MSG_TYPE_READ    7
+#define FS_MSG_TYPE_WRITE   8
+#define FS_MSG_TYPE_SEEK    9
+#define FS_MSG_TYPE_TELL    10
+#define FS_MSG_TYPE_MKDIR   11
+#define FS_MSG_TYPE_RMDIR   12
 
 #define FS_CODE_S_OK              0
 #define FS_CODE_E_FAILURE         1

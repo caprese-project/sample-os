@@ -13,6 +13,7 @@ extern "C" {
   id_cap_t fs_mount(endpoint_cap_t ep_cap, const char* root_path);
   void     fs_unmount(id_cap_t id_cap);
   bool     fs_mounted(const char* root_path);
+  bool     fs_exists(const char* path);
   id_cap_t fs_open(const char* path);
   void     fs_close(id_cap_t fd);
   ssize_t  fs_read(id_cap_t fd, void* buf, size_t count);

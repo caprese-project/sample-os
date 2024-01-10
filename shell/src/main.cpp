@@ -3,6 +3,7 @@
 #include <libcaprese/syscall.h>
 #include <memory>
 #include <service/apm.h>
+#include <service/fs.h>
 #include <service/mm.h>
 #include <sstream>
 #include <string>
@@ -51,6 +52,16 @@ void disp_terminal() {
   exit(status);
 }
 
+std::string find_program(const std::string& command) {
+  for (const auto& path : path_env) {
+    std::string full_path = path_join(path, command);
+    if (fs_exists(full_path.c_str())) {
+      return full_path;
+    }
+  }
+  return "";
+}
+
 void do_command(const std::string& command, const std::vector<std::string>& arguments) {
   if (command == "exit") {
     do_exit(arguments);
@@ -62,24 +73,24 @@ void do_command(const std::string& command, const std::vector<std::string>& argu
   }
   argv[arguments.size() + 1] = nullptr;
 
-  for (const auto& path : path_env) {
-    std::string full_path = path_join(path, command);
-    argv[0]               = full_path.c_str();
-    task_cap_t task       = apm_create(full_path.c_str(), nullptr, APM_CREATE_FLAG_DEFAULT, argv.get());
-
-    if (task == 0) {
-      continue;
-    }
-
-    message_t msg;
-    sys_task_cap_set_kill_notify(task, kill_notify_ep_cap);
-    sys_endpoint_cap_receive(kill_notify_ep_cap, &msg);
-    sys_cap_destroy(task);
-
+  std::string program = find_program(command);
+  if (program.empty()) {
+    std::cout << "Command not found: " << command << std::endl;
     return;
   }
 
-  std::cout << "Failed to create " << command << std::endl;
+  argv[0] = program.c_str();
+
+  task_cap_t task = apm_create(program.c_str(), nullptr, APM_CREATE_FLAG_DEFAULT, argv.get());
+  if (task == 0) {
+    std::cout << "Failed to create program: " << command << std::endl;
+    return;
+  }
+
+  message_t msg;
+  sys_task_cap_set_kill_notify(task, kill_notify_ep_cap);
+  sys_endpoint_cap_receive(kill_notify_ep_cap, &msg);
+  sys_cap_destroy(task);
 }
 
 int main() {

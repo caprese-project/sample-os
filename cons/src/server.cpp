@@ -12,6 +12,18 @@
 id_cap_t cons_id_cap;
 
 namespace {
+  void exists(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_EXISTS);
+
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+
+    bool result = cons_exists(c_path);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_data(msg, 1, result);
+  }
+
   void open(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_OPEN);
 
@@ -103,6 +115,7 @@ namespace {
     [FS_MSG_TYPE_MOUNT]   = NULL,
     [FS_MSG_TYPE_UNMOUNT] = NULL,
     [FS_MSG_TYPE_MOUNTED] = NULL,
+    [FS_MSG_TYPE_EXISTS]  = exists,
     [FS_MSG_TYPE_OPEN]    = open,
     [FS_MSG_TYPE_CLOSE]   = close,
     [FS_MSG_TYPE_READ]    = read,
@@ -129,7 +142,7 @@ namespace {
 
     uintptr_t msg_type = get_ipc_data(msg, 0);
 
-    if (msg_type < FS_MSG_TYPE_OPEN || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
+    if (msg_type < FS_MSG_TYPE_EXISTS || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_UNSUPPORTED);
       return;

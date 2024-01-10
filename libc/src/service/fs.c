@@ -79,6 +79,34 @@ bool fs_mounted(const char* root_path) {
   return result == FS_CODE_S_OK && mounted != 0;
 }
 
+bool fs_exists(const char* path) {
+  assert(path != NULL);
+
+  size_t path_len = strlen(path) + 1;
+
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 1 + path_len);
+  __if_unlikely (msg == NULL) {
+    return false;
+  }
+
+  set_ipc_data(msg, 0, FS_MSG_TYPE_EXISTS);
+  set_ipc_data_array(msg, 1, path, path_len);
+
+  sysret_t sysret = sys_endpoint_cap_call(__fs_ep_cap, msg);
+
+  __if_unlikely (sysret_failed(sysret)) {
+    delete_ipc_message(msg);
+    return false;
+  }
+
+  int  result = get_ipc_data(msg, 0);
+  bool exists = get_ipc_data(msg, 1);
+
+  delete_ipc_message(msg);
+
+  return result == FS_CODE_S_OK && exists != 0;
+}
+
 id_cap_t fs_open(const char* path) {
   assert(path != NULL);
 

@@ -73,6 +73,37 @@ std::pair<decltype(fs_table)::iterator, std::string> find_fs(const std::string& 
   }
 }
 
+bool exists_fs(const std::string& path) {
+  auto result = find_fs(path);
+  if (result.first == fs_table.end()) {
+    return false;
+  }
+
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 2 + result.second.size() + 1);
+  if (msg == nullptr) [[unlikely]] {
+    errno = FS_CODE_E_FAILURE;
+    return false;
+  }
+
+  set_ipc_data(msg, 0, FS_MSG_TYPE_EXISTS);
+  set_ipc_cap(msg, 1, unwrap_sysret(sys_id_cap_copy(result.first->second.id_cap)), false);
+  set_ipc_data_array(msg, 2, result.second.c_str(), result.second.size() + 1);
+
+  if (sysret_failed(sys_endpoint_cap_call(result.first->second.ep_cap, msg))) [[unlikely]] {
+    delete_ipc_message(msg);
+    errno = FS_CODE_E_FAILURE;
+    return false;
+  }
+
+  if (get_ipc_data(msg, 0) != FS_CODE_S_OK) [[unlikely]] {
+    delete_ipc_message(msg);
+    errno = get_ipc_data(msg, 0);
+    return false;
+  }
+
+  return get_ipc_data(msg, 1) != 0;
+}
+
 id_cap_t open_fs(const std::string& path) {
   auto result = find_fs(path);
   if (result.first == fs_table.end()) [[unlikely]] {

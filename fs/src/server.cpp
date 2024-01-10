@@ -87,6 +87,25 @@ namespace {
     set_ipc_data(msg, 1, result);
   }
 
+  void exists(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_EXISTS);
+
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 1));
+    std::string path(c_path, strnlen(c_path, msg->header.payload_length - sizeof(uintptr_t) * 1));
+
+    if (path.empty()) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    bool result = exists_fs(path);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_data(msg, 1, result);
+  }
+
   void open(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_OPEN);
 
@@ -213,6 +232,7 @@ namespace {
     [FS_MSG_TYPE_MOUNT]   = mount,
     [FS_MSG_TYPE_UNMOUNT] = unmount,
     [FS_MSG_TYPE_MOUNTED] = mounted,
+    [FS_MSG_TYPE_EXISTS]  = exists,
     [FS_MSG_TYPE_OPEN]    = open,
     [FS_MSG_TYPE_CLOSE]   = close,
     [FS_MSG_TYPE_READ]    = read,
