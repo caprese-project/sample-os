@@ -219,3 +219,46 @@ bool apm_getenv(task_cap_t task_cap, const char* env, char* value, size_t* value
 
   return result == APM_CODE_S_OK;
 }
+
+bool apm_nextenv(task_cap_t task_cap, const char* env, char* value, size_t* value_size) {
+  assert(task_cap != 0);
+  assert(env != NULL);
+  assert(value != NULL);
+  assert(value_size != NULL);
+
+  size_t env_len = strlen(env) + 1;
+
+  message_t* msg = new_ipc_message(sizeof(uintptr_t) * 2 + env_len + *value_size);
+  __if_unlikely (msg == NULL) {
+    return false;
+  }
+
+  set_ipc_data(msg, 0, APM_MSG_TYPE_NEXTENV);
+  set_ipc_cap(msg, 1, task_cap, true);
+  set_ipc_data_array(msg, 2, env, env_len);
+
+  sysret_t sysret = sys_endpoint_cap_call(__apm_ep_cap, msg);
+
+  __if_unlikely (sysret_failed(sysret)) {
+    delete_ipc_message(msg);
+    return false;
+  }
+
+  int result = get_ipc_data(msg, 0);
+
+  if (result == APM_CODE_S_OK) {
+    size_t value_len = get_ipc_data(msg, 1);
+
+    if (value_len > *value_size) {
+      value_len = *value_size;
+    } else {
+      *value_size = value_len;
+    }
+
+    memcpy(value, get_ipc_data_ptr(msg, 2), value_len);
+  }
+
+  delete_ipc_message(msg);
+
+  return result == APM_CODE_S_OK;
+}

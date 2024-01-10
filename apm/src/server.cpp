@@ -235,15 +235,51 @@ namespace {
     set_ipc_data_array(msg, 2, value.c_str(), value.size() + 1);
   }
 
+  void nextenv(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == APM_MSG_TYPE_NEXTENV);
+
+    task_cap_t task_cap = get_ipc_cap(msg, 1);
+
+    if (unwrap_sysret(sys_cap_type(task_cap)) != CAP_TASK) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, APM_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    const char* env = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    if (env == nullptr) [[unlikely]] {
+      env = "";
+    }
+
+    uint32_t tid = unwrap_sysret(sys_task_cap_tid(task_cap));
+
+    if (!task_exists(tid)) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, APM_CODE_E_NO_SUCH_TASK);
+      return;
+    }
+
+    task& task = lookup_task(tid);
+
+    std::string value;
+    task.next_env(env, value);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, APM_CODE_S_OK);
+    set_ipc_data(msg, 1, value.size() + 1);
+    set_ipc_data_array(msg, 2, value.c_str(), value.size() + 1);
+  }
+
   // clang-format off
 
   constexpr void (*const table[])(message_t*) = {
-    [0]                   = nullptr,
-    [APM_MSG_TYPE_CREATE] = create,
-    [APM_MSG_TYPE_LOOKUP] = lookup,
-    [APM_MSG_TYPE_ATTACH] = attach,
-    [APM_MSG_TYPE_SETENV] = setenv,
-    [APM_MSG_TYPE_GETENV] = getenv,
+    [0]                    = nullptr,
+    [APM_MSG_TYPE_CREATE]  = create,
+    [APM_MSG_TYPE_LOOKUP]  = lookup,
+    [APM_MSG_TYPE_ATTACH]  = attach,
+    [APM_MSG_TYPE_SETENV]  = setenv,
+    [APM_MSG_TYPE_GETENV]  = getenv,
+    [APM_MSG_TYPE_NEXTENV] = nextenv,
   };
 
   // clang-format on
@@ -257,7 +293,7 @@ namespace {
 
     uintptr_t msg_type = get_ipc_data(msg, 0);
 
-    if (msg_type < APM_MSG_TYPE_CREATE || msg_type > APM_MSG_TYPE_GETENV) [[unlikely]] {
+    if (msg_type < APM_MSG_TYPE_CREATE || msg_type > APM_MSG_TYPE_NEXTENV) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, APM_CODE_E_ILL_ARGS);
     } else {

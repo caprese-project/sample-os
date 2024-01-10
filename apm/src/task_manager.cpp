@@ -91,6 +91,7 @@ task::task(task&& other) noexcept
       mm_id_cap(std::move(other.mm_id_cap)),
       ep_cap(std::move(other.ep_cap)),
       name(std::move(other.name)),
+      env(std::move(other.env)),
       tid(other.tid) {
   for (size_t i = 0; i < std::size(cap_space_page_table_caps); ++i) {
     cap_space_page_table_caps[i] = std::move(other.cap_space_page_table_caps[i]);
@@ -105,6 +106,7 @@ task& task::operator=(task&& other) noexcept {
     mm_id_cap           = std::move(other.mm_id_cap);
     ep_cap              = std::move(other.ep_cap);
     name                = std::move(other.name);
+    env                 = std::move(other.env);
     tid                 = other.tid;
 
     for (size_t i = 0; i < std::size(cap_space_page_table_caps); ++i) {
@@ -159,6 +161,24 @@ bool task::get_env(const std::string& env, std::string& value) const noexcept {
   }
 
   value = this->env.at(env);
+
+  return true;
+}
+
+bool task::next_env(const std::string& env, std::string& value) const noexcept {
+  auto iter = this->env.end();
+
+  if (env.empty()) {
+    iter = this->env.begin();
+  } else {
+    iter = this->env.upper_bound(env);
+  }
+
+  if (iter == this->env.end()) {
+    return false;
+  }
+
+  value = iter->first;
 
   return true;
 }

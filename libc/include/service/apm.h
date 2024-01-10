@@ -14,6 +14,7 @@ extern "C" {
   bool           apm_attach(task_cap_t task_cap, endpoint_cap_t ep_cap, const char* app_name);
   bool           apm_setenv(task_cap_t task_cap, const char* env, const char* value);
   bool           apm_getenv(task_cap_t task_cap, const char* env, char* value, size_t* value_size);
+  bool           apm_nextenv(task_cap_t task_cap, const char* env, char* value, size_t* value_size);
 
 #ifdef __cplusplus
 } // extern "C"

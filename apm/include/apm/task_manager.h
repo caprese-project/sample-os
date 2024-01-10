@@ -41,6 +41,7 @@ public:
 
   bool set_env(const std::string& env, std::string value) noexcept;
   bool get_env(const std::string& env, std::string& value) const noexcept;
+  bool next_env(const std::string& env, std::string& value) const noexcept;
 
   void      set_register(uintptr_t reg, uintptr_t value) noexcept;
   uintptr_t get_register(uintptr_t reg) const noexcept;

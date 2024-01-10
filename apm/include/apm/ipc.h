@@ -1,11 +1,12 @@
 #ifndef APM_IPC_H_
 #define APM_IPC_H_
 
-#define APM_MSG_TYPE_CREATE 1
-#define APM_MSG_TYPE_LOOKUP 2
-#define APM_MSG_TYPE_ATTACH 3
-#define APM_MSG_TYPE_SETENV 4
-#define APM_MSG_TYPE_GETENV 5
+#define APM_MSG_TYPE_CREATE  1
+#define APM_MSG_TYPE_LOOKUP  2
+#define APM_MSG_TYPE_ATTACH  3
+#define APM_MSG_TYPE_SETENV  4
+#define APM_MSG_TYPE_GETENV  5
+#define APM_MSG_TYPE_NEXTENV 6
 
 #define APM_CODE_S_OK           0
 #define APM_CODE_E_FAILURE      1
