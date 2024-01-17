@@ -64,6 +64,7 @@ add_subdirectory(clear)
 add_subdirectory(printenv)
 add_subdirectory(pwd)
 add_subdirectory(ls)
+add_subdirectory(touch)
 
 make_ramfs()
 

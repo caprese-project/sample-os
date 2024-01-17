@@ -114,6 +114,13 @@ int ramfs_open(std::string_view path, id_cap_t& fd) {
     return FS_CODE_S_OK;
   }
 
+  file = root_directory->create_file(path, {});
+  if (file) {
+    fd = unwrap_sysret(sys_id_cap_create());
+    file_streams.emplace(fd, *file);
+    return FS_CODE_S_OK;
+  }
+
   return FS_CODE_E_NO_SUCH_FILE;
 }
 

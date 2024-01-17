@@ -103,7 +103,32 @@ static int __ungetc(int ch, struct __FILE*) {
 }
 
 int __finitialize(const char* __restrict filename, int, FILE* __restrict stream) {
-  id_cap_t fd = fs_open(filename);
+  id_cap_t fd = 0;
+
+  if (filename[0] == '/') {
+    fd = fs_open(filename);
+  } else {
+    const char* cwd      = getenv("PWD");
+    size_t      cwd_len  = strlen(cwd);
+    char*       abs_path = malloc(strlen(cwd) + 1 + strlen(filename) + 1);
+
+    if (abs_path == NULL) {
+      return EOF;
+    }
+
+    strcpy(abs_path, cwd);
+
+    if (cwd[cwd_len - 1] != '/') {
+      strcat(abs_path, "/");
+    }
+
+    strcat(abs_path, filename);
+
+    fd = fs_open(abs_path);
+
+    free(abs_path);
+  }
+
   __if_unlikely (fd == 0) {
     return EOF;
   }
