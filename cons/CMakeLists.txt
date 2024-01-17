@@ -5,10 +5,12 @@ add_executable(cons)
 target_sources(
   cons PRIVATE
   src/console.cpp
+  src/directory.cpp
   src/file.cpp
+  src/fs.cpp
   src/main.cpp
   src/server.cpp
-  src/uart_file.cpp
+  src/support/uart.cpp
 )
 
 target_compile_features(cons PRIVATE cxx_std_23)

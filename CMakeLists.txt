@@ -63,6 +63,7 @@ add_subdirectory(echo)
 add_subdirectory(clear)
 add_subdirectory(printenv)
 add_subdirectory(pwd)
+add_subdirectory(ls)
 
 make_ramfs()
 

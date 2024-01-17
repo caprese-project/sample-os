@@ -80,9 +80,12 @@ void disp_terminal() {
 
 std::string find_program(const std::string& command) {
   for (const auto& path : path_env) {
-    std::string full_path = path_join(path, command);
-    if (fs_exists(full_path.c_str())) {
-      return full_path;
+    std::string  full_path = path_join(path, command);
+    fs_file_info file_info;
+    if (fs_info(full_path.c_str(), &file_info)) {
+      if (file_info.file_type == FS_FT_REG) {
+        return full_path;
+      }
     }
   }
   return "";

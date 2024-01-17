@@ -1,10 +1,12 @@
 #ifndef DM_DTB_H_
 #define DM_DTB_H_
 
+#include <functional>
 #include <istream>
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -14,11 +16,11 @@ struct device_tree_property {
 };
 
 struct device_tree_node {
-  std::string                                 name;
-  uintptr_t                                   address;
-  std::string                                 full_name;
-  std::map<std::string, device_tree_property> properties;
-  std::map<std::string, device_tree_node>     children;
+  std::string                                              name;
+  uintptr_t                                                address;
+  std::string                                              full_name;
+  std::map<std::string, device_tree_property, std::less<>> properties;
+  std::map<std::string, device_tree_node, std::less<>>     children;
 };
 
 class device_tree {
@@ -43,8 +45,8 @@ private:
 public:
   void load(const char* begin, const char* end);
 
-  [[nodiscard]] bool                    has_node(const std::string& full_path) const;
-  [[nodiscard]] const device_tree_node& get_node(const std::string& full_path) const;
+  [[nodiscard]] bool                    has_node(std::string_view full_path) const;
+  [[nodiscard]] const device_tree_node& get_node(std::string_view full_path) const;
 };
 
 #endif // DM_DTB_H_

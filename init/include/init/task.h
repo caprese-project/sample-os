@@ -23,6 +23,5 @@ typedef void (*vmapper_t)(task_context_t* ctx, int flags, uintptr_t va, const vo
 bool create_task(task_context_t* ctx, mem_cap_fetcher_t fetch_mem_cap);
 bool load_elf(task_context_t* ctx, const void* elf_data, size_t elf_size, vmapper_t vmap);
 bool alloc_stack(task_context_t* ctx, vmapper_t vmap);
-bool delegate_all_caps(task_context_t* ctx);
 
 #endif // INIT_TASK_H_

@@ -4,6 +4,12 @@ add_executable(ramfs)
 
 target_sources(
   ramfs PRIVATE
+  src/cpio.cpp
+  src/dir_stream.cpp
+  src/directory.cpp
+  src/file_stream.cpp
+  src/file.cpp
+  src/fs.cpp
   src/main.cpp
   src/server.cpp
 )

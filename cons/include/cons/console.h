@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <libcaprese/cap.h>
 #include <string>
+#include <string_view>
 
 struct console_ops {
   void (*putc)(endpoint_cap_t ep_cap, char ch);
@@ -16,26 +17,27 @@ enum struct console_mode {
 };
 
 class console {
-  console_ops  ops;
-  console_mode mode;
-  std::string  buffer;
-  size_t       cursor_pos;
-  bool         esc;
-  std::string  esc_buffer;
+  console_ops    ops;
+  console_mode   mode;
+  std::string    buffer;
+  size_t         cursor_pos;
+  endpoint_cap_t ep_cap;
+  bool           esc;
+  std::string    esc_buffer;
 
 public:
-  console(console_ops ops, console_mode mode = console_mode::cooked);
+  console(endpoint_cap_t ep_cap, console_ops ops, console_mode mode = console_mode::cooked);
 
-  ssize_t read(endpoint_cap_t ep_cap, char* dst, size_t max_size);
-  ssize_t write(endpoint_cap_t ep_cap, const char* str, size_t size);
+  ssize_t read(char* dst, size_t max_size);
+  ssize_t write(std::string_view str);
 
 private:
-  char    getc(endpoint_cap_t ep_cap);
-  void    puts(endpoint_cap_t ep_cap, const char* str, size_t size);
-  void    puts(endpoint_cap_t ep_cap, const char* str);
-  void    move_cursor(endpoint_cap_t ep_cap, std::streamoff offset);
-  ssize_t raw_read(endpoint_cap_t ep_cap, char* dst, size_t max_size);
-  ssize_t cooked_read(endpoint_cap_t ep_cap, char* dst, size_t max_size);
+  char    getc();
+  void    putc(char ch);
+  void    puts(std::string_view str);
+  void    move_cursor(std::streamoff offset);
+  ssize_t raw_read(char* dst, size_t max_size);
+  ssize_t cooked_read(char* dst, size_t max_size);
 };
 
 #endif // CONS_CONSOLE_H_

@@ -23,13 +23,13 @@ bool load_dtb(const char* begin, const char* end) {
   return true;
 }
 
-const device_tree_node& lookup_node(const std::string& full_path) {
-  std::string name = full_path.contains('@') ? full_path.substr(0, full_path.find('@')) : full_path;
+const device_tree_node& lookup_node(std::string_view full_path) {
+  std::string_view name = full_path.contains('@') ? full_path.substr(0, full_path.find('@')) : full_path;
   return dt.get_node(name);
 }
 
-bool launch_device(const std::string& full_path) {
-  std::string name = full_path.contains('@') ? full_path.substr(0, full_path.find('@')) : full_path;
+bool launch_device(std::string_view full_path) {
+  std::string_view name = full_path.contains('@') ? full_path.substr(0, full_path.find('@')) : full_path;
 
   if (!dt.has_node(name)) [[unlikely]] {
     return false;

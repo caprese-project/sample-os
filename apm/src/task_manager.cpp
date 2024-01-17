@@ -4,17 +4,18 @@
 #include <apm/task_manager.h>
 #include <crt/global.h>
 #include <cstring>
+#include <functional>
 #include <libcaprese/syscall.h>
 #include <memory>
 #include <service/mm.h>
 #include <utility>
 
 namespace {
-  std::map<std::string, task> task_table;
-  std::map<uint32_t, task&>   tid_reference_table;
+  std::map<std::string, task, std::less<>> task_table;
+  std::map<uint32_t, task&>                tid_reference_table;
 } // namespace
 
-task::task(std::string name, uint32_t parent_tid, const std::vector<std::string>& args) noexcept: name(std::move(name)), tid(0) {
+task::task(std::string_view name, uint32_t parent_tid, const std::vector<std::string_view>& args) noexcept: name(name), tid(0) {
   cap_space_cap = mm_fetch_and_create_cap_space_object();
   if (!cap_space_cap) [[unlikely]] {
     return;
@@ -55,10 +56,10 @@ task::task(std::string name, uint32_t parent_tid, const std::vector<std::string>
   char**                  argv_index_data = reinterpret_cast<char**>(stack_data.get());
   size_t                  pos             = 0;
   for (size_t i = 0; i < args.size(); ++i) {
-    const std::string& arg = args[i];
+    const std::string_view& arg = args[i];
 
     char* ptr = argv_data + pos;
-    memcpy(ptr, arg.c_str(), arg.size());
+    memcpy(ptr, arg.data(), arg.size());
     ptr[arg.size()] = '\0';
 
     argv_index_data[i] = reinterpret_cast<char*>(argv_root + pos);
@@ -80,7 +81,7 @@ task::task(std::string name, uint32_t parent_tid, const std::vector<std::string>
   }
 }
 
-task::task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) noexcept: task_cap(task_cap), ep_cap(ep_cap), name(std::move(name)), tid(0) {
+task::task(std::string_view name, task_cap_t task_cap, endpoint_cap_t ep_cap) noexcept: task_cap(task_cap), ep_cap(ep_cap), name(name), tid(0) {
   tid = unwrap_sysret(sys_task_cap_tid(task_cap));
 }
 
@@ -141,17 +142,17 @@ uint32_t task::get_tid() const noexcept {
   return tid;
 }
 
-bool task::set_env(const std::string& env, std::string value) noexcept {
+bool task::set_env(std::string_view env, std::string_view value) noexcept {
   if (env.empty()) {
     return false;
   }
 
-  this->env[env] = std::move(value);
+  this->env.emplace(env, value);
 
   return true;
 }
 
-bool task::get_env(const std::string& env, std::string& value) const noexcept {
+bool task::get_env(std::string_view env, std::string& value) const noexcept {
   if (env.empty()) {
     return false;
   }
@@ -160,12 +161,12 @@ bool task::get_env(const std::string& env, std::string& value) const noexcept {
     return false;
   }
 
-  value = this->env.at(env);
+  value = this->env.find(env)->second;
 
   return true;
 }
 
-bool task::next_env(const std::string& env, std::string& value) const noexcept {
+bool task::next_env(std::string_view env, std::string& value) const noexcept {
   auto iter = this->env.end();
 
   if (env.empty()) {
@@ -221,7 +222,7 @@ void task::suspend() const {
   sys_task_cap_suspend(task_cap.get());
 }
 
-bool create_task(std::string name, std::reference_wrapper<std::istream> data, int flags, uint32_t parent_tid, const std::vector<std::string>& args) {
+bool create_task(std::string_view name, std::reference_wrapper<std::istream> data, int flags, uint32_t parent_tid, const std::vector<std::string_view>& args) {
   if (task_table.contains(name)) [[unlikely]] {
     return false;
   }
@@ -261,25 +262,25 @@ bool create_task(std::string name, std::reference_wrapper<std::istream> data, in
   tid_reference_table.emplace(task_ref.get_tid(), task_ref);
 
   if ((flags & APM_CREATE_FLAG_SUSPENDED) == 0) {
-    task_table.at(name).resume();
+    task_table.find(name)->second.resume();
   }
 
   return true;
 }
 
-bool attach_task(std::string name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
+bool attach_task(std::string_view name, task_cap_t task_cap, endpoint_cap_t ep_cap) {
   if (task_table.contains(name)) [[unlikely]] {
     return false;
   }
 
-  auto  result   = task_table.emplace(std::move(name), task(std::move(name), task_cap, ep_cap));
+  auto  result   = task_table.emplace(name, task(name, task_cap, ep_cap));
   task& task_ref = result.first->second;
   tid_reference_table.emplace(task_ref.get_tid(), task_ref);
 
   return true;
 }
 
-bool task_exists(const std::string& name) {
+bool task_exists(std::string_view name) {
   return task_table.contains(name);
 }
 
@@ -287,8 +288,8 @@ bool task_exists(uint32_t tid) {
   return tid_reference_table.contains(tid);
 }
 
-task& lookup_task(const std::string& name) {
-  return task_table.at(name);
+task& lookup_task(std::string_view name) {
+  return task_table.find(name)->second;
 }
 
 task& lookup_task(uint32_t tid) {

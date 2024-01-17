@@ -23,6 +23,7 @@ target_sources(
   src/service/apm.c
   src/service/fs.c
   src/service/mm.c
+  src/dirent.c
   src/signal.c
   src/stdio.c
   src/stdlib.c

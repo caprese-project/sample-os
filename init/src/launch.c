@@ -217,10 +217,6 @@ void launch_mm(task_context_t* ctx) {
     abort();
   }
 
-  __if_unlikely (!delegate_all_caps(ctx)) {
-    abort();
-  }
-
   endpoint_cap_t init_mm_ep_cap = early_create_ep_cap();
 
   unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_ARG_0, copy_ep_cap_and_transfer(ctx->task_cap, init_mm_ep_cap)));
@@ -230,7 +226,7 @@ void launch_mm(task_context_t* ctx) {
 
   const int max_page = get_max_page();
 
-  size_t     buf_size = 2 + max_page + root_boot_info->num_mem_caps;
+  size_t     buf_size = 2 + max_page + root_boot_info->num_mem_caps + TERA_PAGE * 8 + TERA_PAGE + 1;
   char       msg_buf[sizeof(struct message_header) + buf_size * sizeof(uintptr_t)];
   message_t* msg               = (message_t*)msg_buf;
   msg->header.payload_length   = 0;
@@ -243,14 +239,34 @@ void launch_mm(task_context_t* ctx) {
     set_ipc_cap(msg, 2 + i, root_boot_info->page_table_caps[i], true);
   }
 
+  size_t idx = 2 + max_page;
+
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
     bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
     if (device) {
       continue;
     }
 
-    set_ipc_cap(msg, 2 + max_page + i, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
+    set_ipc_cap(msg, idx++, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
   }
+
+  for (int level = 0; level < TERA_PAGE; ++level) {
+    for (int i = 0; i < 8; ++i) {
+      if (ctx->page_table_caps[level][i] != 0) {
+        set_ipc_cap(msg, idx++, ctx->page_table_caps[level][i], true);
+      }
+    }
+  }
+
+  for (int level = 0; level < TERA_PAGE; ++level) {
+    if (ctx->cap_space_page_table_caps[level] != 0) {
+      set_ipc_cap(msg, idx++, ctx->cap_space_page_table_caps[level], true);
+    }
+  }
+
+  set_ipc_cap(msg, idx++, ctx->cap_space_cap, true);
+
+  assert(idx <= buf_size);
 
   unwrap_sysret(sys_endpoint_cap_call(init_mm_ep_cap, msg));
 

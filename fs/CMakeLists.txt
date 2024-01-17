@@ -4,9 +4,12 @@ add_executable(fs)
 
 target_sources(
   fs PRIVATE
-  src/fs_table.cpp
+  src/dir_stream.cpp
+  src/directory.cpp
   src/main.cpp
+  src/mount_point.cpp
   src/server.cpp
+  src/vfs.cpp
 )
 
 target_compile_features(fs PRIVATE cxx_std_23)

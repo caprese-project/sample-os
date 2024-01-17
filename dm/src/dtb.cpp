@@ -198,20 +198,20 @@ void device_tree::align(std::istream& stream) {
   }
 }
 
-bool device_tree::has_node(const std::string& full_path) const {
+bool device_tree::has_node(std::string_view full_path) const {
   if (!full_path.starts_with('/')) [[unlikely]] {
     return false;
   }
 
   const device_tree_node* node = &root;
-  std::string             path = full_path;
+  std::string_view        path = full_path;
   do {
     size_t slash_pos = path.find('/', 1);
     if (slash_pos == std::string::npos) {
       slash_pos = path.size();
     }
 
-    std::string name = path.substr(1, slash_pos - 1);
+    std::string_view name = path.substr(1, slash_pos - 1);
 
     auto iter = node->children.find(name);
     if (iter == node->children.end()) {
@@ -226,20 +226,20 @@ bool device_tree::has_node(const std::string& full_path) const {
   return true;
 }
 
-const device_tree_node& device_tree::get_node(const std::string& full_path) const {
+const device_tree_node& device_tree::get_node(std::string_view full_path) const {
   if (!has_node(full_path)) [[unlikely]] {
     abort();
   }
 
   const device_tree_node* node = &root;
-  std::string             path = full_path;
+  std::string_view        path = full_path;
   do {
     size_t slash_pos = path.find('/', 1);
     if (slash_pos == std::string::npos) {
       slash_pos = path.size();
     }
 
-    std::string name = path.substr(1, slash_pos - 1);
+    std::string_view name = path.substr(1, slash_pos - 1);
 
     auto iter = node->children.find(name);
     if (iter == node->children.end()) {

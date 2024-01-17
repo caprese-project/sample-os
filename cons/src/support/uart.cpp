@@ -1,4 +1,4 @@
-#include <cons/uart_file.h>
+#include <cons/support/uart.h>
 #include <libcaprese/syscall.h>
 #include <uart/ipc.h>
 

@@ -11,6 +11,7 @@
 #include <service/mm.h>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 endpoint_cap_t apm_ep_cap;
@@ -45,14 +46,14 @@ namespace {
     int flags = static_cast<int>(get_ipc_data(msg, 1));
     int argc  = static_cast<int>(get_ipc_data(msg, 2));
 
-    size_t      index = 3;
-    std::string path  = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, index));
+    size_t           index = 3;
+    std::string_view path  = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, index));
 
     index += (path.size() + 1 + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
-    std::string name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, index));
+    std::string_view name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, index));
 
     index += (name.size() + 1 + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
-    std::vector<std::string> args;
+    std::vector<std::string_view> args;
     for (int i = 0; i < argc; ++i) {
       args.emplace_back(reinterpret_cast<const char*>(get_ipc_data_ptr(msg, index)));
       index += (args.back().size() + 1 + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
@@ -69,7 +70,7 @@ namespace {
       __fs_ep_cap         = fs_task.get_ep_cap().get();
     }
 
-    id_cap_t fd = fs_open(path.c_str());
+    id_cap_t fd = fs_open(path.data());
 
     if (fd == 0) [[unlikely]] {
       destroy_ipc_message(msg);
@@ -98,8 +99,10 @@ namespace {
       }
     }
 
+    std::string rand_name_buf;
     if (name.empty()) {
-      name = "{" + rand_name() + "}";
+      rand_name_buf = "{" + rand_name() + "}";
+      name          = rand_name_buf;
     }
 
     std::istringstream stream(data, std::ios_base::binary);
@@ -119,7 +122,7 @@ namespace {
   void lookup(message_t* msg) {
     assert(get_ipc_data(msg, 0) == APM_MSG_TYPE_LOOKUP);
 
-    std::string name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 1));
+    std::string_view name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 1));
 
     if (!task_exists(name)) [[unlikely]] {
       destroy_ipc_message(msg);
@@ -153,7 +156,7 @@ namespace {
       return;
     }
 
-    std::string name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 3));
+    std::string_view name = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 3));
 
     if (!attach_task(name, task_cap, ep_cap)) [[unlikely]] {
       destroy_ipc_message(msg);
@@ -176,8 +179,8 @@ namespace {
       return;
     }
 
-    std::string env   = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
-    std::string value = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2 + (env.size() + 1 + sizeof(uintptr_t) - 1) / sizeof(uintptr_t)));
+    std::string_view env   = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    std::string_view value = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2 + (env.size() + 1 + sizeof(uintptr_t) - 1) / sizeof(uintptr_t)));
 
     uint32_t tid = unwrap_sysret(sys_task_cap_tid(task_cap));
 
@@ -210,7 +213,7 @@ namespace {
       return;
     }
 
-    std::string env = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    std::string_view env = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
 
     uint32_t tid = unwrap_sysret(sys_task_cap_tid(task_cap));
 

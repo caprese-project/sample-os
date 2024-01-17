@@ -207,23 +207,3 @@ bool alloc_stack(task_context_t* ctx, vmapper_t vmap) {
   unwrap_sysret(sys_task_cap_set_reg(ctx->task_cap, REG_STACK_POINTER, stack_va + KILO_PAGE_SIZE));
   return true;
 }
-
-bool delegate_all_caps(task_context_t* ctx) {
-  for (int level = 0; level < TERA_PAGE; ++level) {
-    for (int i = 0; i < 8; ++i) {
-      if (ctx->page_table_caps[level][i] != 0) {
-        unwrap_sysret(sys_task_cap_delegate_cap(ctx->task_cap, ctx->page_table_caps[level][i]));
-      }
-    }
-  }
-
-  for (int level = 0; level < TERA_PAGE; ++level) {
-    if (ctx->cap_space_page_table_caps[level] != 0) {
-      unwrap_sysret(sys_task_cap_delegate_cap(ctx->task_cap, ctx->cap_space_page_table_caps[level]));
-    }
-  }
-
-  unwrap_sysret(sys_task_cap_delegate_cap(ctx->task_cap, ctx->cap_space_cap));
-
-  return true;
-}

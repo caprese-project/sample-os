@@ -1,180 +1,140 @@
 #include <crt/global.h>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
+#include <cstdio>
 #include <fs/ipc.h>
-#include <iosfwd>
-#include <iterator>
-#include <libcaprese/cxx/id_map.h>
+#include <libcaprese/ipc.h>
 #include <libcaprese/syscall.h>
 #include <memory>
+#include <ramfs/directory.h>
+#include <ramfs/file.h>
+#include <ramfs/fs.h>
 #include <ramfs/server.h>
 #include <service/mm.h>
-#include <utility>
 
 id_cap_t ramfs_id_cap;
 
 namespace {
-  struct cpio_newc_header {
-    char magic[6];
-    char ino[8];
-    char mode[8];
-    char uid[8];
-    char gid[8];
-    char nlink[8];
-    char mtime[8];
-    char filesize[8];
-    char devmajor[8];
-    char devminor[8];
-    char rdevmajor[8];
-    char rdevminor[8];
-    char namesize[8];
-    char check[8];
-  };
+  void info(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_INFO);
 
-  constexpr const char CPIO_MAGIC[]   = "070701";
-  constexpr const char CPIO_EOF_TAG[] = "TRAILER!!!";
-
-  const char* cpio_data;
-
-  size_t round_up(size_t value, size_t alignment) {
-    return (value + alignment - 1) & ~(alignment - 1);
-  }
-
-  std::pair<const char*, size_t> find_file(const char* file_name) {
-    const char* ptr = cpio_data;
-    while (true) {
-      const cpio_newc_header* header = (const cpio_newc_header*)ptr;
-
-      if (strncmp(header->magic, CPIO_MAGIC, sizeof(header->magic)) != 0) {
-        break;
-      }
-
-      char name_size_str[sizeof(header->namesize) + 1];
-      memcpy(name_size_str, header->namesize, sizeof(header->namesize));
-      name_size_str[sizeof(header->namesize)] = '\0';
-
-      size_t name_size = strtoull(name_size_str, nullptr, 16);
-
-      char data_size_str[sizeof(header->filesize) + 1];
-      memcpy(data_size_str, header->filesize, sizeof(header->filesize));
-      data_size_str[sizeof(header->filesize)] = '\0';
-
-      size_t data_size = strtoull(data_size_str, nullptr, 16);
-
-      const char* name = ptr + sizeof(cpio_newc_header);
-      const char* data = ptr + round_up(sizeof(cpio_newc_header) + name_size, 4);
-
-      if (strcmp(name, CPIO_EOF_TAG) == 0) {
-        break;
-      } else if (strcmp(name, file_name) == 0) {
-        return std::pair<const char*, size_t> { data, data_size };
-      } else {
-        ptr = data + round_up(data_size, 4);
-      }
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    if (c_path == nullptr) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
     }
 
-    return std::pair<const char*, size_t> { nullptr, 0 };
-  }
-
-  struct file_info {
-    const char*    start;
-    const char*    end;
-    std::streampos pos;
-  };
-
-  caprese::id_map<file_info> file_table;
-
-  int ramfs_read(id_cap_t fd, void* buf, size_t max_size, size_t* act_size) {
-    file_info&      file_info = file_table.at(fd);
-    std::streamsize file_size = file_info.end - file_info.start;
-    std::streamsize rem_size  = file_size - static_cast<std::streamsize>(file_info.pos);
-    *act_size                 = std::min<size_t>(max_size, rem_size);
-
-    memcpy(buf, file_info.start + file_info.pos, *act_size);
-    file_info.pos += *act_size;
-
-    if (max_size > static_cast<size_t>(rem_size)) [[unlikely]] {
-      return FS_CODE_E_EOF;
-    }
-
-    return FS_CODE_S_OK;
-  }
-
-  void exists(message_t* msg) {
-    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_EXISTS);
-
-    const char* path  = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
-    auto [data, size] = find_file(path);
+    fs_file_info info;
+    int          result = ramfs_get_info(c_path, info);
 
     destroy_ipc_message(msg);
-    set_ipc_data(msg, 0, FS_CODE_S_OK);
-    set_ipc_data(msg, 1, data != nullptr);
+    set_ipc_data(msg, 0, result);
+
+    if (result != 0) [[unlikely]] {
+      return;
+    }
+
+    set_ipc_data_array(msg, 1, &info, sizeof(info));
+  }
+
+  void create(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_CREATE);
+
+    int         type   = get_ipc_data(msg, 2);
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 3));
+
+    if (c_path == nullptr) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    int result = ramfs_create(c_path, type);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
+  }
+
+  void remove(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_REMOVE);
+
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    if (c_path == nullptr) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    int result = ramfs_remove(c_path);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
   }
 
   void open(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_OPEN);
 
-    const char* path  = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
-    auto [data, size] = find_file(path);
-
-    if (data == nullptr) [[unlikely]] {
+    const char* c_path = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 2));
+    if (c_path == nullptr) [[unlikely]] {
       destroy_ipc_message(msg);
-      set_ipc_data(msg, 0, FS_CODE_E_NO_SUCH_FILE);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    id_cap_t fd = unwrap_sysret(sys_id_cap_create());
-    file_table.emplace(fd, file_info { data, data + size, 0 });
+    id_cap_t fd;
+    int      result = ramfs_open(c_path, fd);
 
     destroy_ipc_message(msg);
-    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_data(msg, 0, result);
+
+    if (result != 0) [[unlikely]] {
+      return;
+    }
+
     set_ipc_cap(msg, 1, unwrap_sysret(sys_id_cap_copy(fd)), false);
   }
 
   void close(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_CLOSE);
 
-    id_cap_t fd = get_ipc_cap(msg, 2);
-    if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+    id_cap_t id = get_ipc_cap(msg, 1);
+    if (unwrap_sysret(sys_cap_type(id)) != CAP_ID) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    if (!file_table.contains(fd)) [[unlikely]] {
+    if (unwrap_sysret(sys_id_cap_compare(id, ramfs_id_cap)) != 0) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    file_table.erase(fd);
+    int result = ramfs_close(id);
 
     destroy_ipc_message(msg);
-    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_data(msg, 0, result);
   }
 
   void read(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_READ);
 
     id_cap_t fd = get_ipc_cap(msg, 2);
-
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    if (!file_table.contains(fd)) [[unlikely]] {
+    size_t len = get_ipc_data(msg, 3);
+    if (len > FS_READ_MAX_SIZE) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    std::streamsize         size = std::min<std::streamsize>(get_ipc_data(msg, 3), msg->header.payload_capacity - sizeof(uintptr_t) * 2);
-    std::unique_ptr<char[]> buf  = std::make_unique<char[]>(size);
-    size_t                  act_size;
-    int                     result = ramfs_read(fd, buf.get(), size, &act_size);
+    std::unique_ptr<char[]> buffer = std::make_unique<char[]>(len);
+    std::streamsize         act_size;
+    int                     result = ramfs_read(fd, buffer.get(), len, act_size);
 
     destroy_ipc_message(msg);
     set_ipc_data(msg, 0, result);
@@ -184,66 +144,103 @@ namespace {
     }
 
     set_ipc_data(msg, 1, act_size);
-    set_ipc_data_array(msg, 2, buf.get(), act_size);
+    set_ipc_data_array(msg, 2, buffer.get(), act_size);
+  }
+
+  void write(message_t* msg) {
+    assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_WRITE);
+
+    id_cap_t fd = get_ipc_cap(msg, 2);
+    if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    size_t len = get_ipc_data(msg, 3);
+    if (len > FS_WRITE_MAX_SIZE) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    const char* data = reinterpret_cast<const char*>(get_ipc_data_ptr(msg, 4));
+    if (data == nullptr) [[unlikely]] {
+      destroy_ipc_message(msg);
+      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
+    }
+
+    std::streamsize act_size;
+    int             result = ramfs_write(fd, std::string_view(data, len), act_size);
+
+    destroy_ipc_message(msg);
+    set_ipc_data(msg, 0, result);
+
+    if (result != FS_CODE_S_OK && result != FS_CODE_E_EOF) [[unlikely]] {
+      return;
+    }
+
+    set_ipc_data(msg, 1, act_size);
   }
 
   void seek(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_SEEK);
 
     id_cap_t fd = get_ipc_cap(msg, 2);
-
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
       return;
     }
 
-    if (!file_table.contains(fd)) [[unlikely]] {
-      destroy_ipc_message(msg);
-      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
-      return;
+    std::streamoff offset = get_ipc_data(msg, 3);
+    int            whence = get_ipc_data(msg, 4);
+
+    std::ios_base::seekdir dir;
+    switch (whence) {
+      case SEEK_SET:
+        dir = std::ios_base::beg;
+        break;
+      case SEEK_CUR:
+        dir = std::ios_base::cur;
+        break;
+      case SEEK_END:
+        dir = std::ios_base::end;
+        break;
+      default:
+        destroy_ipc_message(msg);
+        set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+        return;
     }
 
-    std::streampos pos = static_cast<std::streampos>(get_ipc_data(msg, 3));
-
-    if (pos < 0) [[unlikely]] {
-      destroy_ipc_message(msg);
-      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
-    }
-
-    file_info&      file_info = file_table.at(fd);
-    std::streamsize file_size = file_info.end - file_info.start;
-
-    if (pos > file_size) {
-      pos = file_size;
-    }
-
-    file_info.pos = pos;
+    int result = ramfs_seek(fd, offset, dir);
 
     destroy_ipc_message(msg);
-    set_ipc_data(msg, 0, FS_CODE_S_OK);
+    set_ipc_data(msg, 0, result);
   }
 
   void tell(message_t* msg) {
     assert(get_ipc_data(msg, 0) == FS_MSG_TYPE_TELL);
 
     id_cap_t fd = get_ipc_cap(msg, 2);
-
     if (unwrap_sysret(sys_cap_type(fd)) != CAP_ID) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
+      return;
     }
 
-    if (!file_table.contains(fd)) [[unlikely]] {
-      destroy_ipc_message(msg);
-      set_ipc_data(msg, 0, FS_CODE_E_ILL_ARGS);
-    }
-
-    file_info& file_info = file_table.at(fd);
+    std::streampos pos;
+    int            result = ramfs_tell(fd, pos);
 
     destroy_ipc_message(msg);
-    set_ipc_data(msg, 0, FS_CODE_S_OK);
-    set_ipc_data(msg, 1, static_cast<uintptr_t>(file_info.pos));
+    set_ipc_data(msg, 0, result);
+
+    if (result != FS_CODE_S_OK) [[unlikely]] {
+      return;
+    }
+
+    set_ipc_data(msg, 1, pos);
   }
 
   // clang-format off
@@ -253,15 +250,15 @@ namespace {
     [FS_MSG_TYPE_MOUNT]   = nullptr,
     [FS_MSG_TYPE_UNMOUNT] = nullptr,
     [FS_MSG_TYPE_MOUNTED] = nullptr,
-    [FS_MSG_TYPE_EXISTS]  = exists,
+    [FS_MSG_TYPE_INFO]    = info,
+    [FS_MSG_TYPE_CREATE]  = create,
+    [FS_MSG_TYPE_REMOVE]  = remove,
     [FS_MSG_TYPE_OPEN]    = open,
     [FS_MSG_TYPE_CLOSE]   = close,
     [FS_MSG_TYPE_READ]    = read,
-    [FS_MSG_TYPE_WRITE]   = nullptr,
+    [FS_MSG_TYPE_WRITE]   = write,
     [FS_MSG_TYPE_SEEK]    = seek,
     [FS_MSG_TYPE_TELL]    = tell,
-    [FS_MSG_TYPE_MKDIR]   = nullptr,
-    [FS_MSG_TYPE_RMDIR]   = nullptr,
   };
 
   // clang-format on
@@ -282,7 +279,7 @@ namespace {
 
     uintptr_t msg_type = get_ipc_data(msg, 0);
 
-    if (msg_type < FS_MSG_TYPE_EXISTS || msg_type > FS_MSG_TYPE_RMDIR) [[unlikely]] {
+    if (msg_type >= std::size(table)) [[unlikely]] {
       destroy_ipc_message(msg);
       set_ipc_data(msg, 0, FS_CODE_E_UNSUPPORTED);
       return;
@@ -298,10 +295,8 @@ namespace {
   }
 } // namespace
 
-[[noreturn]] void run(uintptr_t ramfs_va_base) {
-  cpio_data = reinterpret_cast<const char*>(ramfs_va_base);
-
-  message_t* msg = new_ipc_message(0x1000);
+[[noreturn]] void run() {
+  message_t* msg = new_ipc_message(FS_MSG_CAPACITY);
   sysret_t   sysret;
 
   sysret.error = SYS_E_UNKNOWN;
