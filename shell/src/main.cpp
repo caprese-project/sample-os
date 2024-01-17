@@ -8,11 +8,30 @@
 #include <service/mm.h>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 endpoint_cap_t                                                   kill_notify_ep_cap;
 std::vector<std::string>                                         path_env;
 std::map<std::string, void (*)(const std::vector<std::string>&)> builtin_commands;
+
+std::string path_join(std::string_view path, std::string_view name) {
+  if (path.empty()) [[unlikely]] {
+    return std::string(name);
+  }
+
+  std::string result;
+  result.reserve(path.size() + name.size() + 1);
+  result.append(path);
+
+  if (path.back() != '/') [[unlikely]] {
+    result.append(1, '/');
+  }
+
+  result.append(name);
+
+  return result;
+}
 
 [[noreturn]] void do_exit(const std::vector<std::string>& arguments) {
   int status = 0;
@@ -35,7 +54,12 @@ void do_cd(const std::vector<std::string>& arguments) {
   if (arguments.empty()) {
     setenv("PWD", "/", true);
   } else if (arguments.size() == 1) {
-    setenv("PWD", arguments[0].c_str(), true);
+    if (arguments[0].front() == '/') {
+      setenv("PWD", arguments[0].c_str(), true);
+    } else {
+      std::string path = path_join(getenv("PWD"), arguments[0]);
+      setenv("PWD", path.c_str(), true);
+    }
   } else {
     std::cout << "Usage: cd [<path>]" << std::endl;
   }
@@ -60,18 +84,6 @@ void init() {
   builtin_commands["exit"]   = do_exit;
   builtin_commands["setenv"] = do_setenv;
   builtin_commands["cd"]     = do_cd;
-}
-
-std::string path_join(const std::string& path, const std::string& name) {
-  if (path.empty()) [[unlikely]] {
-    return name;
-  }
-
-  if (path.back() == '/') [[unlikely]] {
-    return path + name;
-  }
-
-  return path + "/" + name;
 }
 
 void disp_terminal() {
