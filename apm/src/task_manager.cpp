@@ -147,7 +147,7 @@ bool task::set_env(std::string_view env, std::string_view value) noexcept {
     return false;
   }
 
-  this->env.emplace(env, value);
+  this->env.insert_or_assign(std::string(env), value);
 
   return true;
 }
