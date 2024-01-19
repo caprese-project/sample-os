@@ -385,19 +385,12 @@ void launch_dm(task_context_t* ctx) {
   }
 
   root_boot_info_t* root_boot_info = (root_boot_info_t*)__init_context.__arg_regs[0];
-  size_t            buf_size       = 2 + 1 + root_boot_info->arch_info.num_dtb_vp_caps + root_boot_info->num_mem_caps;
-  char              msg_buf[sizeof(struct message_header) + sizeof(uintptr_t) * buf_size];
+  char              msg_buf[sizeof(struct message_header) + 128 * sizeof(uintptr_t)];
   message_t*        msg        = (message_t*)msg_buf;
   msg->header.payload_length   = 0;
   msg->header.payload_capacity = sizeof(msg_buf) - sizeof(struct message_header);
-
-  size_t index = 2;
-
-  set_ipc_cap(msg, index++, unwrap_sysret(sys_id_cap_copy(__mm_id_cap)), true);
-
-  for (size_t i = 0; i < root_boot_info->arch_info.num_dtb_vp_caps; ++i) {
-    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->arch_info.dtb_vp_caps_offset + i], true);
-  }
+  msg->header.data_type_map[0] = 0;
+  msg->header.data_type_map[1] = 0;
 
   size_t num_mem_caps = 0;
   for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
@@ -411,12 +404,50 @@ void launch_dm(task_context_t* ctx) {
       continue;
     }
 
-    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
     ++num_mem_caps;
   }
 
   set_ipc_data(msg, 0, root_boot_info->arch_info.num_dtb_vp_caps);
   set_ipc_data(msg, 1, num_mem_caps);
+
+  size_t index = 2;
+
+  set_ipc_cap(msg, index++, unwrap_sysret(sys_id_cap_copy(__mm_id_cap)), true);
+
+  for (size_t i = 0; i < root_boot_info->arch_info.num_dtb_vp_caps; ++i) {
+    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->arch_info.dtb_vp_caps_offset + i], true);
+
+    if (index == 128) {
+      unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, msg));
+      destroy_ipc_message(msg);
+      index = 0;
+    }
+  }
+
+  for (size_t i = 0; i < root_boot_info->num_mem_caps; ++i) {
+    __if_unlikely (unwrap_sysret(sys_cap_type(root_boot_info->caps[root_boot_info->mem_caps_offset + i])) != CAP_MEM) {
+      continue;
+    }
+
+    bool device = unwrap_sysret(sys_mem_cap_device(root_boot_info->caps[root_boot_info->mem_caps_offset + i]));
+    __if_unlikely (!device) {
+      continue;
+    }
+
+    set_ipc_cap(msg, index++, root_boot_info->caps[root_boot_info->mem_caps_offset + i], true);
+
+    --num_mem_caps;
+    if (index == 128) {
+      unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, msg));
+      destroy_ipc_message(msg);
+      index = 0;
+    }
+  }
+
+  if (index != 0) {
+    unwrap_sysret(sys_endpoint_cap_send_long(ep_cap, msg));
+    destroy_ipc_message(msg);
+  }
 
   unwrap_sysret(sys_endpoint_cap_call(ep_cap, msg));
 

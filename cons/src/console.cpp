@@ -15,7 +15,23 @@ ssize_t console::read(char* dst, size_t max_size) {
 }
 
 ssize_t console::write(std::string_view str) {
-  this->puts(str);
+  switch (this->mode) {
+    case console_mode::raw:
+      this->puts(str);
+      break;
+    case console_mode::cooked:
+      for (const auto& ch : str) {
+        if (ch == '\n') {
+          this->putc('\r');
+          this->putc('\n');
+        } else {
+          this->putc(ch);
+        }
+      }
+      break;
+    default:
+      return 0;
+  }
   return str.size();
 }
 
@@ -72,7 +88,7 @@ ssize_t console::raw_read(char* dst, size_t max_size) {
 
     // CR/LF
     if (ch == '\r' || ch == '\n') {
-      this->putc('\n');
+      this->puts("\r\n");
     } else {
       this->putc(ch);
     }
@@ -122,7 +138,7 @@ ssize_t console::cooked_read(char* dst, size_t max_size) {
           // CR/LF
           case '\r':
           case '\n': {
-            this->putc('\n');
+            this->puts("\r\n");
             this->buffer += '\n';
             this->cursor_pos = 0;
             break;

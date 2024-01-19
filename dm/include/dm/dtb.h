@@ -11,13 +11,22 @@
 #include <vector>
 
 struct device_tree_property {
-  std::string                                                                                                                           name;
-  std::variant<uint32_t, uint64_t, std::string, std::vector<char>, std::vector<std::string>, std::vector<std::pair<uintptr_t, size_t>>> value;
+  std::string       name;
+  std::vector<char> value;
+
+  [[nodiscard]] uint32_t                                  to_u32() const;
+  [[nodiscard]] uint64_t                                  to_u64() const;
+  [[nodiscard]] std::string                               to_str() const;
+  [[nodiscard]] std::vector<char>                         to_array() const;
+  [[nodiscard]] std::vector<std::string>                  to_str_list() const;
+  [[nodiscard]] std::vector<std::pair<uintptr_t, size_t>> to_reg(uint32_t addr_cells, uint32_t size_cells) const;
 };
 
 struct device_tree_node {
   std::string                                              name;
   uintptr_t                                                address;
+  uint32_t                                                 address_cells;
+  uint32_t                                                 size_cells;
   std::string                                              full_name;
   std::map<std::string, device_tree_property, std::less<>> properties;
   std::map<std::string, device_tree_node, std::less<>>     children;

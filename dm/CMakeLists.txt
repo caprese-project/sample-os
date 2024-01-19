@@ -7,6 +7,7 @@ target_sources(
   src/device_manager.cpp
   src/dtb.cpp
   src/main.cpp
+  src/dev/ns16550a.cpp
 )
 
 target_compile_features(dm PRIVATE c_std_17)

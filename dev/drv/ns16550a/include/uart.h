@@ -36,7 +36,7 @@
 
 #include <stdint.h>
 
-void init_uart(uintptr_t base_addr);
+void init_uart(uintptr_t base_addr, uint32_t frequency, uint32_t baudrate, uint32_t reg_shift, uint32_t reg_width, uint32_t reg_offset);
 void uart_putc(int ch);
 int  uart_getc(void);
 

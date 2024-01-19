@@ -9,7 +9,7 @@ parser.add_argument("--machine", default="virt")
 parser.add_argument("--cpu", default="rv64")
 parser.add_argument("--smp", default="1")
 parser.add_argument("--ram", default="1024")
-parser.add_argument("--kernel", default="build/image.elf")
+parser.add_argument("--kernel", default="build/caprese.elf")
 parser.add_argument("--gdb", default="tcp::1234")
 parser.add_argument("--debug", action="store_true")
 

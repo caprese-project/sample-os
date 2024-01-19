@@ -12,6 +12,55 @@ const std::set<std::string> device_tree::array_types(std::begin(FDT_ARRAY_TYPES)
 const std::set<std::string> device_tree::phandle_types(std::begin(FDT_PHANDLE_TYPES), std::end(FDT_PHANDLE_TYPES));
 const std::set<std::string> device_tree::str_list_types(std::begin(FDT_STR_LIST_TYPES), std::end(FDT_STR_LIST_TYPES));
 
+uint32_t device_tree_property::to_u32() const {
+  return std::byteswap(*reinterpret_cast<const uint32_t*>(value.data()));
+}
+
+uint64_t device_tree_property::to_u64() const {
+  return std::byteswap(*reinterpret_cast<const uint64_t*>(value.data()));
+}
+
+std::string device_tree_property::to_str() const {
+  return std::string(value.data(), value.size());
+}
+
+std::vector<char> device_tree_property::to_array() const {
+  return value;
+}
+
+std::vector<std::string> device_tree_property::to_str_list() const {
+  std::vector<std::string> list;
+  std::istringstream       stream(to_str());
+  std::string              str;
+  while (std::getline(stream, str, '\0')) {
+    list.push_back(str);
+  }
+  return list;
+}
+
+std::vector<std::pair<uintptr_t, size_t>> device_tree_property::to_reg(uint32_t addr_cells, uint32_t size_cells) const {
+  std::vector<std::pair<uintptr_t, size_t>> regions;
+  const std::vector<char>&                  data   = this->value;
+  const uint32_t*                           ptr    = reinterpret_cast<const uint32_t*>(data.data());
+  size_t                                    length = data.size() / sizeof(uint32_t);
+
+  for (size_t i = 0; i < length; i += (addr_cells + size_cells)) {
+    uintptr_t addr = 0;
+    for (size_t j = 0; j < addr_cells; ++j) {
+      addr = (addr << 32) | std::byteswap(ptr[i + j]);
+    }
+
+    size_t size = 0;
+    for (size_t j = 0; j < size_cells; ++j) {
+      size = (size << 32) | std::byteswap(ptr[i + addr_cells + j]);
+    }
+
+    regions.emplace_back(addr, size);
+  }
+
+  return regions;
+}
+
 void device_tree::load(const char* begin, const char* end) {
   std::istringstream stream(std::string(begin, end - begin));
 
@@ -57,6 +106,9 @@ device_tree_node device_tree::parse_node(std::istream& stream, uint32_t off_dt_s
   }
   node.full_name = dir + "/" + node.name;
 
+  node.address_cells = address_cells;
+  node.size_cells    = size_cells;
+
   align(stream);
 
   while (!stream.eof()) {
@@ -72,63 +124,12 @@ device_tree_node device_tree::parse_node(std::istream& stream, uint32_t off_dt_s
 
       std::streampos pos = stream.tellg();
 
-      if (u32_types.contains(property.name)) {
-        property.value = read_u32(stream);
-      } else if (u64_types.contains(property.name)) {
-        property.value = read_u64(stream);
-      } else if (str_types.contains(property.name)) {
-        property.value = read_str(stream);
-      } else if (array_types.contains(property.name)) {
-        std::vector<char> data;
-        data.resize(len);
-        stream.read(data.data(), len);
-
-        property.value = std::move(data);
-      } else if (phandle_types.contains(property.name)) {
-        property.value = read_u32(stream);
-      } else if (str_list_types.contains(property.name)) {
-        std::vector<std::string> strings;
-        std::streampos           beg = stream.tellg();
-
-        while (stream.tellg() - beg < len) {
-          strings.emplace_back(read_str(stream));
-        }
-
-        property.value = std::move(strings);
-      } else {
-        std::vector<char> data;
-        data.resize(len);
-        stream.read(data.data(), len);
-
-        property.value = std::move(data);
-      }
+      property.value.resize(len);
+      stream.read(property.value.data(), len);
 
       stream.seekg(pos + static_cast<std::streamoff>(len));
 
       align(stream);
-
-      if (property.name == "reg") [[unlikely]] {
-        std::vector<std::pair<uintptr_t, size_t>> regions;
-        std::vector<char>&                        data   = std::get<std::vector<char>>(property.value);
-        uint32_t*                                 ptr    = reinterpret_cast<uint32_t*>(data.data());
-        size_t                                    length = data.size() / sizeof(uint32_t);
-
-        for (size_t i = 0; i < length; i += (address_cells + size_cells)) {
-          uintptr_t addr = 0;
-          for (size_t j = 0; j < address_cells; ++j) {
-            addr = (addr << 32) | std::byteswap(ptr[i + j]);
-          }
-
-          size_t size = 0;
-          for (size_t j = 0; j < size_cells; ++j) {
-            size = (size << 32) | std::byteswap(ptr[i + address_cells + j]);
-          }
-
-          regions.emplace_back(addr, size);
-        }
-
-        property.value = std::move(regions);
-      }
 
       node.properties.emplace(property.name, std::move(property));
     } else if (tag == FDT_BEGIN_NODE) {
@@ -137,10 +138,10 @@ device_tree_node device_tree::parse_node(std::istream& stream, uint32_t off_dt_s
       uint32_t child_address_cells = FDT_DEFAULT_ADDRESS_CELLS;
       uint32_t child_size_cells    = FDT_DEFAULT_SIZE_CELLS;
       if (node.properties.contains("#address-cells")) {
-        child_address_cells = std::get<uint32_t>(node.properties.at("#address-cells").value);
+        child_address_cells = node.properties.at("#address-cells").to_u32();
       }
       if (node.properties.contains("#size-cells")) {
-        child_size_cells = std::get<uint32_t>(node.properties.at("#size-cells").value);
+        child_size_cells = node.properties.at("#size-cells").to_u32();
       }
 
       device_tree_node child = parse_node(stream, off_dt_struct, off_dt_strings, node.full_name == "/" ? "" : node.full_name, child_address_cells, child_size_cells);

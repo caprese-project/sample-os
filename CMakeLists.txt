@@ -78,8 +78,13 @@ else()
   set(CONFIG_LOG_LEVEL fatal)
 endif()
 
-set(PLATFORM qemu-riscv-virt)
-set(CONFIG_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/image.elf)
+if (NOT DEFINED PLATFORM)
+  set(PLATFORM qemu-riscv-virt)
+endif()
+
+if (NOT DEFINED CONFIG_OUTPUT_DIR)
+  set(CONFIG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 
 FetchContent_Declare(
   caprese
